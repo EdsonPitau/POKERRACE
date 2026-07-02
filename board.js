@@ -17,6 +17,16 @@ function cellCenterPercent(num) {
     // "casa 0" — the starting grid, well clear of cell 1's checkered line, in the decorative gate area
     return { x: 92.5, y: (GRID_Y0 / BOARD_IMG_H) * 100 };
   }
+  if (num === 88) {
+    // The board art has a small decorative green notch cut into the middle of this corner
+    // stub (verified by pixel-scanning: 87 and 89 on either side sit cleanly on the road,
+    // but 88's normal grid position lands in the notch) — nudge down to the real road strip
+    // just below it, still well inside cell 88's own bounds.
+    const c = BOARD_CELLS[88];
+    const px = GRID_X0 + c.col * GRID_COLW;
+    const py = GRID_Y0 + c.row * GRID_ROWH + 220;
+    return { x: (px / BOARD_IMG_W) * 100, y: (py / BOARD_IMG_H) * 100 };
+  }
   const c = BOARD_CELLS[num];
   if (!c) return { x: 50, y: 50 };
   const px = GRID_X0 + c.col * GRID_COLW;

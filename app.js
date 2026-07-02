@@ -425,17 +425,22 @@ async function animateMoveTo(player, target) {
   renderPlayers();
 }
 
-// ---------------- V2 core rule: EVERYONE advances, based on their own hand ----------------
+// ---------------- V2 core rule: movement resolution, shared by both modes ----------------
 // Resolves the "no more than 2 karts per cell" collision rule: cars are processed in order
 // of hand strength (best first), each taking its desired cell if there's room, otherwise
-// backing off one cell at a time until it finds a free spot.
-function resolveMovementTargets(players) {
+// backing off one cell at a time until it finds a free spot. `stationaryPlayers` (optional)
+// are players who are NOT moving this round but still occupy their current cell, so movers
+// correctly cascade around them too (used by 5-Card Draw, where only the winner advances).
+function resolveMovementTargets(players, stationaryPlayers) {
   const withRaw = players.map(p => ({ player: p, raw: p.position + p.evalResult.moveDistance }));
   const finishers = withRaw.filter(w => w.raw >= 100);
   const movers = withRaw.filter(w => w.raw < 100)
     .sort((a, b) => compareHands(b.player.evalResult, a.player.evalResult));
 
   const results = finishers.map(f => ({ player: f.player, target: f.raw }));
+  (stationaryPlayers || []).forEach(sp => {
+    results.push({ player: sp, target: sp.position, stationary: true });
+  });
   movers.forEach(m => {
     let target = m.raw;
     while (target > m.player.position) {
@@ -445,11 +450,31 @@ function resolveMovementTargets(players) {
     }
     results.push({ player: m.player, target });
   });
-  return results;
+  return results.filter(r => !r.stationary);
 }
 
 async function moveEveryone() {
   const targets = resolveMovementTargets(state.players);
+  targets.forEach(t => {
+    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < 100) {
+      log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
+    }
+  });
+  await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
+}
+
+// ---------------- 5-Card Draw rule: only the best hand(s) of the round advance ----------------
+function determineHandWinners(players) {
+  let best = null;
+  players.forEach(p => {
+    if (!best || compareHands(p.evalResult, best) > 0) best = p.evalResult;
+  });
+  return players.filter(p => compareHands(p.evalResult, best) === 0);
+}
+
+async function moveWinnersOnly(winners, allPlayers) {
+  const stationary = allPlayers.filter(p => !winners.includes(p));
+  const targets = resolveMovementTargets(winners, stationary);
   targets.forEach(t => {
     if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < 100) {
       log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
@@ -530,11 +555,18 @@ async function playRoundDraw() {
   renderPlayers();
   await delay(300);
 
-  state.players.forEach(p => log(`${p.name}: ${p.evalResult.name} — avança ${p.evalResult.moveDistance} casa(s)!`));
-  updatePhase('Todos avançam conforme sua mão!');
+  const winners = determineHandWinners(state.players);
+  const winnerNames = winners.map(w => w.name).join(' e ');
+  state.players.forEach(p => {
+    const isWinner = winners.includes(p);
+    log(isWinner
+      ? `${p.name}: ${p.evalResult.name} — avança ${p.evalResult.moveDistance} casa(s)!`
+      : `${p.name}: ${p.evalResult.name} — não é a melhor mão, fica parado.`);
+  });
+  updatePhase(winners.length > 1 ? `Empate! ${winnerNames} avançam!` : `${winnerNames} tem a melhor mão e avança!`);
   await delay(700);
 
-  await moveEveryone();
+  await moveWinnersOnly(winners, state.players);
   renderPlayers();
 
   await finishRoundOrContinue(playRoundDraw);
