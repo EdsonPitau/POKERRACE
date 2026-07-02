@@ -272,6 +272,9 @@ function renderHand() {
     }
     container.appendChild(el);
   });
+  // In 5-Card Draw, also show the player's own hand on the board's 5 card slots
+  // (the "POKER RACE" card icons) — in Hold'em those slots show the community cards instead.
+  if (state.mode === 'draw') updateCommunitySlots(human.hand);
 }
 
 // ---------------- Rendering: hole cards (hold'em) ----------------
