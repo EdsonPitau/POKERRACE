@@ -272,9 +272,6 @@ function renderHand() {
     }
     container.appendChild(el);
   });
-  // In 5-Card Draw, also show the player's own hand on the board's 5 card slots
-  // (the "POKER RACE" card icons) — in Hold'em those slots show the community cards instead.
-  if (state.mode === 'draw') updateCommunitySlots(human.hand);
 }
 
 // ---------------- Rendering: hole cards (hold'em) ----------------
@@ -527,6 +524,7 @@ async function playRoundDraw() {
   });
   renderPlayers();
   renderHand();
+  updateCommunitySlots(null);
   await delay(500);
 
   updatePhase('Sua vez — escolha as cartas para trocar');
@@ -554,11 +552,12 @@ async function playRoundDraw() {
     p.evalResult = evaluateHand(p.hand);
     p.revealed = true;
   });
+  const winners = determineHandWinners(state.players);
   renderHand();
   renderPlayers();
+  updateCommunitySlots(winners[0].hand); // show the best hand of the round on the board's card slots
   await delay(300);
 
-  const winners = determineHandWinners(state.players);
   const winnerNames = winners.map(w => w.name).join(' e ');
   state.players.forEach(p => {
     const isWinner = winners.includes(p);
