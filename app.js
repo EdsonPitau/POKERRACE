@@ -1,0 +1,798 @@
+// ===================== POKER RACE — APP CONTROLLER (V2) =====================
+
+const KART_COLORS = ['yellow', 'blue', 'green', 'red'];
+const KART_LABEL = { yellow: 'Amarelo', blue: 'Azul', green: 'Verde', red: 'Vermelho' };
+
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+let state = null;
+let selectedDiscards = new Set();
+let humanDrawResolver = null;
+let humanBetResolver = null;
+let humanZeroResolver = null;
+
+// ---------------- Coins (persisted for the human player only) ----------------
+const COINS_KEY = 'pokerrace_coins_v2';
+function loadCoins() {
+  const v = localStorage.getItem(COINS_KEY);
+  const n = v !== null ? parseInt(v, 10) : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+function saveCoins(n) { localStorage.setItem(COINS_KEY, String(Math.max(0, n))); }
+let playerCoins = loadCoins();
+function addPlayerCoins(delta) {
+  playerCoins = Math.max(0, playerCoins + delta);
+  saveCoins(playerCoins);
+  updateCoinsDisplay();
+}
+function updateCoinsDisplay() {
+  $$('.coins-value').forEach(el => el.textContent = playerCoins);
+  const holdemBtn = document.getElementById('modeHoldemBtn');
+  if (holdemBtn) {
+    const locked = playerCoins < 1000;
+    holdemBtn.classList.toggle('locked', locked);
+    holdemBtn.title = locked ? 'Requer 1.000 moedas para jogar Texas Hold\'em' : '';
+  }
+}
+
+const DRAW_PAYOUT = { 1: 100, 2: 50, 3: 25, 4: 0 };
+const HOLDEM_MULTIPLIER = { 1: 3, 2: 2, 3: 1, 4: 0 };
+
+// ---------------- Setup screen ----------------
+let setupBots = 2;
+let setupColor = 'yellow';
+let setupMode = 'draw'; // 'draw' | 'holdem'
+
+function initSetupScreen() {
+  const botRow = $('#botCountChoices');
+  botRow.innerHTML = '';
+  [1, 2, 3].forEach(n => {
+    const b = document.createElement('button');
+    b.className = 'choice-btn' + (n === setupBots ? ' active' : '');
+    b.textContent = n + (n === 1 ? ' bot' : ' bots');
+    b.onclick = () => { setupBots = n; initSetupScreen(); };
+    botRow.appendChild(b);
+  });
+
+  const colorRow = $('#kartColorChoices');
+  colorRow.innerHTML = '';
+  KART_COLORS.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'kart-choice' + (c === setupColor ? ' active' : '');
+    b.innerHTML = `<img src="kart_${c}_token.png" alt="${KART_LABEL[c]}"><span>${KART_LABEL[c]}</span>`;
+    b.onclick = () => { setupColor = c; initSetupScreen(); };
+    colorRow.appendChild(b);
+  });
+
+  const modeRow = $('#modeChoices');
+  modeRow.innerHTML = '';
+  [['draw', '5-Card Draw'], ['holdem', "Texas Hold'em"]].forEach(([val, label]) => {
+    const b = document.createElement('button');
+    const locked = val === 'holdem' && playerCoins < 1000;
+    b.className = 'choice-btn' + (val === setupMode ? ' active' : '') + (locked ? ' locked' : '');
+    b.id = val === 'holdem' ? 'modeHoldemBtn' : '';
+    b.innerHTML = label + (locked ? '<br><small>🔒 requer 1.000 moedas</small>' : '');
+    b.onclick = () => {
+      if (locked) { alert("Texas Hold'em precisa de pelo menos 1.000 moedas de saldo. Jogue 5-Card Draw para ganhar moedas!"); return; }
+      setupMode = val; initSetupScreen();
+    };
+    modeRow.appendChild(b);
+  });
+
+  updateCoinsDisplay();
+}
+
+function createPlayers(numBots, humanColor) {
+  const others = KART_COLORS.filter(c => c !== humanColor);
+  const players = [{
+    id: 0, name: 'Você', color: humanColor, isHuman: true,
+    position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
+    betCoins: 2000, bettingActive: false, zeroCount: 0, raceWinnings: 0
+  }];
+  for (let i = 0; i < numBots; i++) {
+    const color = others[i];
+    players.push({
+      id: i + 1, name: `Bot ${KART_LABEL[color]}`, color, isHuman: false,
+      position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
+      betCoins: 2000, bettingActive: false, zeroCount: 0, raceWinnings: 0
+    });
+  }
+  return players;
+}
+
+// ---------------- Rendering: board ----------------
+function initBoard() {
+  return new Promise(resolve => {
+    $('#boardContainer').innerHTML = `
+      <img id="boardImage" src="board_bg.jpg" alt="Tabuleiro Poker Race" draggable="false">
+      <div id="tokenLayer"></div>
+      <div id="communityLayer"></div>`;
+    const img = document.getElementById('boardImage');
+    if (img.complete && img.naturalWidth > 0) {
+      resolve();
+    } else {
+      img.addEventListener('load', () => resolve(), { once: true });
+      img.addEventListener('error', () => resolve(), { once: true });
+    }
+  });
+}
+
+function initCommunitySlots() {
+  const layer = document.getElementById('communityLayer');
+  if (!layer) return;
+  layer.innerHTML = '';
+  communitySlotsPercent().forEach((slot, i) => {
+    const div = document.createElement('div');
+    div.className = 'community-slot';
+    div.id = 'community-slot-' + i;
+    div.style.left = slot.left + '%';
+    div.style.top = slot.top + '%';
+    div.style.width = slot.width + '%';
+    div.style.height = slot.height + '%';
+    layer.appendChild(div);
+  });
+}
+
+function updateCommunitySlots(cards) {
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById('community-slot-' + i);
+    if (!el) continue;
+    const card = cards ? cards[i] : null;
+    if (!card) {
+      el.innerHTML = '';
+      el.classList.remove('has-card');
+    } else {
+      el.classList.add('has-card');
+      el.innerHTML = `<span class="cc-rank" style="color:${SUIT_COLOR[card.suit]}">${rankLabel(card.rank)}</span>
+        <span class="cc-suit" style="color:${SUIT_COLOR[card.suit]}">${SUIT_SYMBOL[card.suit]}</span>`;
+    }
+  }
+}
+
+function renderTokens() {
+  const layer = document.getElementById('tokenLayer');
+  if (!layer) return;
+  layer.innerHTML = '';
+
+  const groups = {};
+  state.players.forEach(p => {
+    const clamped = Math.max(0, Math.min(p.position, 100));
+    (groups[clamped] = groups[clamped] || []).push(p);
+  });
+
+  // Cars share a lane side-by-side, perpendicular to the direction of travel. Offsets below
+  // are sized so two karts overlap only slightly (~12%) instead of floating apart with a gap
+  // (matching the reference artwork) while always staying inside the cell's own bounds —
+  // verified against the actual cell/kart dimensions, not eyeballed.
+  const halfW = 1.15, halfH = 1.46;     // primary separation axis (% of board width / height)
+  const jitterW = 0.98, jitterH = 1.24; // secondary axis, used only for 3-4 karts sharing a cell
+
+  const OFFSETS_V = {
+    1: [[0, 0]],
+    2: [[-halfW, 0], [halfW, 0]],
+    3: [[-halfW, -jitterH], [halfW, -jitterH], [0, jitterH]],
+    4: [[-halfW, -jitterH], [halfW, -jitterH], [-halfW, jitterH], [halfW, jitterH]]
+  };
+  const OFFSETS_H = {
+    1: [[0, 0]],
+    2: [[0, -halfH], [0, halfH]],
+    3: [[-jitterW, -halfH], [-jitterW, halfH], [jitterW, 0]],
+    4: [[-jitterW, -halfH], [jitterW, -halfH], [-jitterW, halfH], [jitterW, halfH]]
+  };
+  // The starting grid (casa 0) keeps the 4 cars in a tight 2x2 cluster, like a real
+  // starting grid, instead of spread across the whole gate area. Tuned from an in-app
+  // screenshot: front pair (closer to the checkered line) needed to sit further forward,
+  // back pair further back (to reveal the line), and the top row needed to drop slightly
+  // to share the bottom row's line alignment.
+  const START_GRID_OFFSETS = {
+    1: [[0, 0]],
+    2: [[-1.6, 0], [1.6, 0]],
+    3: [[-1.6, -1.3], [1.6, -1.3], [0, 1.9]],
+    4: [[-1.6, -1.5], [1.6, -1.5], [-1.6, 1.9], [1.6, 1.9]]
+  };
+
+  Object.keys(groups).forEach(cellNum => {
+    const n = parseInt(cellNum, 10);
+    const group = groups[cellNum];
+    const center = cellCenterPercent(n);
+    const heading = cellHeadingDeg(n);
+    let offs;
+    if (n === 0) {
+      offs = START_GRID_OFFSETS[group.length] || START_GRID_OFFSETS[4];
+    } else {
+      const table = cellOrientationForOffsets(n) === 'h' ? OFFSETS_H : OFFSETS_V;
+      offs = table[group.length] || table[4];
+    }
+    group.forEach((p, i) => {
+      const [dx, dy] = offs[i];
+      const img = document.createElement('img');
+      img.src = `kart_${p.color}_token.png`;
+      img.className = 'kart-token' + (p.isHuman ? ' is-human' : '');
+      img.style.left = (center.x + dx) + '%';
+      img.style.top = (center.y + dy) + '%';
+      img.style.transform = `translate(-50%,-50%) rotate(${heading}deg)`;
+      img.title = p.name;
+      layer.appendChild(img);
+    });
+  });
+}
+
+function cellOrientationForOffsets(num) {
+  const deg = cellHeadingDeg(num);
+  return (deg === 0 || deg === 180) ? 'h' : 'v';
+}
+
+// ---------------- Rendering: players strip ----------------
+function renderPlayers() {
+  const strip = $('#playersStrip');
+  strip.innerHTML = '';
+  const sorted = state.players.slice().sort((a, b) => b.position - a.position);
+  sorted.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'player-chip' + (p.isHuman ? ' human' : '');
+    const avatarHtml = `<img class="chip-kart" src="kart_${p.color}_token.png">`;
+    let statusHtml = '';
+    if (p.revealed && p.evalResult) {
+      statusHtml = `<div class="chip-hand">${p.evalResult.name}</div>`;
+    } else if (state.mode === 'draw' && p.discardedCount === null) {
+      statusHtml = `<div class="chip-hand muted">pensando…</div>`;
+    } else {
+      statusHtml = `<div class="chip-hand muted">pronto</div>`;
+    }
+    card.innerHTML = `
+      ${avatarHtml}
+      <div class="chip-info">
+        <div class="chip-name">${p.name}</div>
+        <div class="chip-pos">Casa ${Math.min(p.position, 100)}</div>
+        ${statusHtml}
+      </div>`;
+    strip.appendChild(card);
+  });
+}
+
+// ---------------- Rendering: hand (5-card draw) ----------------
+function renderHand() {
+  const human = state.players[0];
+  const container = $('#handCards');
+  container.innerHTML = '';
+  human.hand.forEach((card, i) => {
+    const el = document.createElement('div');
+    const isSelected = selectedDiscards.has(i);
+    el.className = 'card' + (isSelected ? ' selected' : '') + (human.revealed ? ' revealed' : '');
+    el.innerHTML = `<span class="card-rank" style="color:${SUIT_COLOR[card.suit]}">${rankLabel(card.rank)}</span>
+                     <span class="card-suit" style="color:${SUIT_COLOR[card.suit]}">${SUIT_SYMBOL[card.suit]}</span>`;
+    if (state.phase === 'draw-human') {
+      el.onclick = () => {
+        if (selectedDiscards.has(i)) selectedDiscards.delete(i); else selectedDiscards.add(i);
+        renderHand();
+        updateSwapButton();
+      };
+    }
+    container.appendChild(el);
+  });
+}
+
+// ---------------- Rendering: hole cards (hold'em) ----------------
+function renderHoleCards() {
+  const human = state.players[0];
+  const container = $('#handCards');
+  container.innerHTML = '';
+  human.holeCards.forEach(card => {
+    const el = document.createElement('div');
+    el.className = 'card' + (human.revealed ? ' revealed' : '');
+    el.innerHTML = `<span class="card-rank" style="color:${SUIT_COLOR[card.suit]}">${rankLabel(card.rank)}</span>
+                     <span class="card-suit" style="color:${SUIT_COLOR[card.suit]}">${SUIT_SYMBOL[card.suit]}</span>`;
+    container.appendChild(el);
+  });
+}
+
+function updateSwapButton() {
+  const btn = $('#btnSwap');
+  const n = selectedDiscards.size;
+  btn.textContent = n === 0 ? 'MANTER MÃO (STAND PAT)' : `TROCAR ${n} CARTA${n > 1 ? 'S' : ''}`;
+}
+
+// ---------------- Log ----------------
+function log(msg) {
+  const panel = $('#logPanel');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = msg;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function updatePhase(text) {
+  $('#phaseLabel').textContent = text;
+}
+
+// ---------------- Human draw phase (5-card draw only) ----------------
+function humanDrawPhase() {
+  return new Promise(resolve => {
+    selectedDiscards = new Set();
+    state.phase = 'draw-human';
+    renderHand();
+    updateSwapButton();
+    $('#handActions').classList.remove('hidden');
+    humanDrawResolver = resolve;
+  });
+}
+
+function commitHumanDraw() {
+  const human = state.players[0];
+  const discardIdx = Array.from(selectedDiscards).sort((a, b) => b - a);
+  discardIdx.forEach(i => human.hand.splice(i, 1));
+  const newCards = state.deck.splice(0, discardIdx.length);
+  human.hand = human.hand.concat(newCards);
+  human.discardedCount = discardIdx.length;
+  log(discardIdx.length === 0 ? 'Você manteve sua mão.' : `Você trocou ${discardIdx.length} carta(s).`);
+  $('#handActions').classList.add('hidden');
+  selectedDiscards = new Set();
+  state.phase = 'draw-bots';
+  renderHand();
+  if (humanDrawResolver) { humanDrawResolver(); humanDrawResolver = null; }
+}
+
+// ---------------- Betting UI (Hold'em) ----------------
+function humanBetPrompt(question, options) {
+  return new Promise(resolve => {
+    $('#bettingQuestion').textContent = question;
+    const box = $('#bettingOptions');
+    box.innerHTML = '';
+    options.forEach(opt => {
+      const b = document.createElement('button');
+      b.className = 'btn-secondary bet-option-btn';
+      b.textContent = opt.label;
+      b.onclick = () => { $('#bettingPanel').classList.add('hidden'); resolve(opt.value); };
+      box.appendChild(b);
+    });
+    $('#bettingPanel').classList.remove('hidden');
+    humanBetResolver = resolve;
+  });
+}
+
+function humanZeroCoinsPrompt() {
+  return new Promise(resolve => {
+    $('#zeroCoinsModal').classList.remove('hidden');
+    const human = state.players[0];
+    const canWatchAd = human.zeroCount < 3;
+    $('#zeroAdBtn').style.display = canWatchAd ? '' : 'none';
+    $('#zeroAdLimitMsg').style.display = canWatchAd ? 'none' : '';
+    humanZeroResolver = resolve;
+  });
+}
+
+function wireZeroCoinsModal() {
+  $('#zeroContinueBtn').onclick = () => { $('#zeroCoinsModal').classList.add('hidden'); if (humanZeroResolver) humanZeroResolver('continue'); };
+  $('#zeroQuitBtn').onclick = () => { $('#zeroCoinsModal').classList.add('hidden'); if (humanZeroResolver) humanZeroResolver('quit'); };
+  $('#zeroAdBtn').onclick = async () => {
+    $('#zeroAdBtn').disabled = true;
+    $('#zeroAdBtn').textContent = 'Reproduzindo anúncio…';
+    await delay(1200);
+    $('#zeroCoinsModal').classList.add('hidden');
+    $('#zeroAdBtn').disabled = false;
+    $('#zeroAdBtn').textContent = '📺 Assistir anúncio (+10 moedas)';
+    if (humanZeroResolver) humanZeroResolver('ad');
+  };
+}
+
+// Bot heuristic: decide whether to bet, given hole cards and (optional) evaluated hand-so-far.
+function botWantsToBet(bot, evalSoFar) {
+  if (evalSoFar) return evalSoFar.category >= 1 ? Math.random() < 0.85 : Math.random() < 0.25;
+  const [a, b] = bot.holeCards;
+  const pair = a.rank === b.rank;
+  const highCards = a.rank >= 11 && b.rank >= 11;
+  const suitedConnected = a.suit === b.suit && Math.abs(a.rank - b.rank) <= 2;
+  if (pair || highCards || suitedConnected) return Math.random() < 0.9;
+  return Math.random() < 0.35;
+}
+
+// Ensures a player (human or bot) always has enough coins to bet `amount`, running the
+// zero-coins flow if needed. Returns true if the player ends up able to (and does) bet.
+async function ensureCoinsAndBet(p, amount, isHuman) {
+  if (amount <= 0) return true;
+  if (isHuman ? playerCoins >= amount : p.betCoins >= amount) return true;
+  // not enough coins
+  p.zeroCount++;
+  if (!isHuman) return false; // bots simply skip betting when short
+  const choice = await humanZeroCoinsPrompt();
+  if (choice === 'ad' && p.zeroCount <= 3) {
+    addPlayerCoins(10);
+    log('Você assistiu a um anúncio e ganhou 10 moedas.');
+    return playerCoins >= amount;
+  }
+  if (choice === 'quit') {
+    state.humanQuit = true;
+  }
+  return false;
+}
+
+// ---------------- Animation: move token to an explicit target ----------------
+async function animateMoveTo(player, target) {
+  const from = player.position;
+  const steps = Math.max(0, Math.min(target, 100) - Math.min(from, 100));
+  const dir = target >= from ? 1 : -1;
+  for (let s = 1; s <= steps; s++) {
+    player.position = from + dir * s;
+    renderTokens();
+    renderPlayers();
+    await delay(90);
+  }
+  player.position = target;
+  renderTokens();
+  renderPlayers();
+}
+
+// ---------------- V2 core rule: EVERYONE advances, based on their own hand ----------------
+// Resolves the "no more than 2 karts per cell" collision rule: cars are processed in order
+// of hand strength (best first), each taking its desired cell if there's room, otherwise
+// backing off one cell at a time until it finds a free spot.
+function resolveMovementTargets(players) {
+  const withRaw = players.map(p => ({ player: p, raw: p.position + p.evalResult.moveDistance }));
+  const finishers = withRaw.filter(w => w.raw >= 100);
+  const movers = withRaw.filter(w => w.raw < 100)
+    .sort((a, b) => compareHands(b.player.evalResult, a.player.evalResult));
+
+  const results = finishers.map(f => ({ player: f.player, target: f.raw }));
+  movers.forEach(m => {
+    let target = m.raw;
+    while (target > m.player.position) {
+      const occupants = results.filter(r => r.target === target).length;
+      if (occupants < 2) break;
+      target--;
+    }
+    results.push({ player: m.player, target });
+  });
+  return results;
+}
+
+async function moveEveryone() {
+  const targets = resolveMovementTargets(state.players);
+  targets.forEach(t => {
+    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < 100) {
+      log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
+    }
+  });
+  await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
+}
+
+// ---------------- Ranking & payout ----------------
+function computeFinalRanking(players) {
+  const sorted = players.slice().sort((a, b) => b.position - a.position);
+  const ranks = [];
+  let currentRank = 1;
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0) {
+      const prev = sorted[i - 1], cur = sorted[i];
+      const exactTie = prev.position === cur.position && prev.position >= 100 &&
+        prev.evalResult && cur.evalResult && compareHands(prev.evalResult, cur.evalResult) === 0;
+      if (!exactTie) currentRank = currentRank + 1; // compress: next distinct rank is prevRank+1, not index+1
+    }
+    ranks.push({ player: sorted[i], rank: currentRank });
+  }
+  return ranks;
+}
+
+// ---------------- Bot AI context ----------------
+function botContext(bot) {
+  const positions = state.players.map(p => p.position);
+  const maxPos = Math.max(...positions);
+  const avg = positions.reduce((a, b) => a + b, 0) / positions.length;
+  return {
+    leading: bot.position >= maxPos,
+    farBehind: (avg - bot.position) > 8
+  };
+}
+
+// ---------------- Round flow: 5-Card Draw ----------------
+async function playRoundDraw() {
+  $('#roundNum').textContent = state.round;
+  updatePhase('Embaralhando e distribuindo cartas…');
+  state.deck = shuffle(freshDeck());
+  state.players.forEach(p => {
+    p.hand = p.position >= 100 ? p.hand : state.deck.splice(0, 5);
+    p.discardedCount = null;
+    p.revealed = false;
+    p.evalResult = null;
+  });
+  renderPlayers();
+  renderHand();
+  await delay(500);
+
+  updatePhase('Sua vez — escolha as cartas para trocar');
+  await humanDrawPhase();
+
+  for (let i = 1; i < state.players.length; i++) {
+    const bot = state.players[i];
+    updatePhase(`${bot.name} está decidindo…`);
+    renderPlayers();
+    await delay(400 + Math.random() * 400);
+    const ctx = botContext(bot);
+    const discard = botChooseDiscards(bot.hand, ctx);
+    discard.sort((a, b) => b - a).forEach(idx => bot.hand.splice(idx, 1));
+    const newCards = state.deck.splice(0, discard.length);
+    bot.hand = bot.hand.concat(newCards);
+    bot.discardedCount = discard.length;
+    log(`${bot.name} trocou ${discard.length} carta${discard.length === 1 ? '' : 's'}.`);
+    renderPlayers();
+    await delay(250);
+  }
+
+  updatePhase('Showdown! Revelando as mãos…');
+  await delay(400);
+  state.players.forEach(p => {
+    p.evalResult = evaluateHand(p.hand);
+    p.revealed = true;
+  });
+  renderHand();
+  renderPlayers();
+  await delay(300);
+
+  state.players.forEach(p => log(`${p.name}: ${p.evalResult.name} — avança ${p.evalResult.moveDistance} casa(s)!`));
+  updatePhase('Todos avançam conforme sua mão!');
+  await delay(700);
+
+  await moveEveryone();
+  renderPlayers();
+
+  await finishRoundOrContinue(playRoundDraw);
+}
+
+// ---------------- Round flow: Texas Hold'em (with betting) ----------------
+async function playRoundHoldem() {
+  $('#roundNum').textContent = state.round;
+  state.pot = 0;
+  updatePhase("Distribuindo cartas (Texas Hold'em)…");
+  state.deck = shuffle(freshDeck());
+  state.players.forEach(p => {
+    p.holeCards = state.deck.splice(0, 2);
+    p.discardedCount = 0;
+    p.revealed = false;
+    p.evalResult = null;
+    p.bettingActive = false;
+  });
+  state.community = state.deck.splice(0, 5);
+  renderPlayers();
+  renderHoleCards();
+  updateCommunitySlots(null);
+  await delay(500);
+
+  if (state.humanQuit) { await concludeHoldemRace(); return; }
+
+  // ---- Pré-Flop: 5 coins to participate in betting this round ----
+  updatePhase('Pré-Flop — aposte 5 moedas para participar das apostas');
+  const human = state.players[0];
+  const canAffordPreflop = playerCoins >= 5;
+  if (canAffordPreflop) {
+    const wantsToBet = await humanBetPrompt('Apostar 5 moedas no pré-flop?', [
+      { label: 'Apostar 5 moedas', value: true },
+      { label: 'Não apostar', value: false }
+    ]);
+    if (wantsToBet) {
+      addPlayerCoins(-5);
+      state.pot += 5;
+      human.bettingActive = true;
+      log('Você apostou 5 moedas no pré-flop.');
+    } else {
+      log('Você optou por não apostar nesta rodada (ainda avança normalmente).');
+    }
+  } else {
+    log('Você não tem moedas suficientes para o pré-flop.');
+  }
+  for (let i = 1; i < state.players.length; i++) {
+    const bot = state.players[i];
+    if (bot.betCoins >= 5 && botWantsToBet(bot, null)) {
+      bot.betCoins -= 5; state.pot += 5; bot.bettingActive = true;
+      log(`${bot.name} apostou 5 moedas no pré-flop.`);
+    }
+  }
+  renderPlayers();
+  await delay(500);
+
+  // ---- Flop / Turn / River ----
+  const streets = [
+    { name: 'Flop', count: 3, label: 'flop' },
+    { name: 'Turn', count: 1, label: 'turn' },
+    { name: 'River', count: 1, label: 'river' }
+  ];
+  let revealedCount = 0;
+  for (const street of streets) {
+    revealedCount += street.count;
+    updatePhase(`${street.name} — revelando carta(s) comunitária(s)…`);
+    for (let i = revealedCount - street.count + 1; i <= revealedCount; i++) {
+      updateCommunitySlots(state.community.slice(0, i));
+      await delay(400);
+    }
+    await delay(300);
+
+    if (human.bettingActive) {
+      const soFar = evaluateBestN(human.holeCards.concat(state.community.slice(0, revealedCount)));
+      const canAfford = playerCoins >= 25;
+      if (canAfford) {
+        const bet = await humanBetPrompt(`${street.name} — apostar até 25 moedas?`, [
+          { label: 'Apostar 25 moedas', value: 25 },
+          { label: 'Passar (0)', value: 0 }
+        ]);
+        if (bet > 0) { addPlayerCoins(-bet); state.pot += bet; log(`Você apostou ${bet} moedas no ${street.name}.`); }
+      } else {
+        const ok = await ensureCoinsAndBet(human, 25, true);
+        if (state.humanQuit) { await concludeHoldemRace(); return; }
+        if (ok) { addPlayerCoins(-25); state.pot += 25; log(`Você apostou 25 moedas no ${street.name}.`); }
+      }
+    }
+    for (let i = 1; i < state.players.length; i++) {
+      const bot = state.players[i];
+      if (!bot.bettingActive) continue;
+      const soFar = evaluateBestN(bot.holeCards.concat(state.community.slice(0, revealedCount)));
+      if (bot.betCoins >= 25 && botWantsToBet(bot, soFar)) {
+        bot.betCoins -= 25; state.pot += 25;
+        log(`${bot.name} apostou 25 moedas no ${street.name}.`);
+      }
+    }
+    renderPlayers();
+  }
+
+  updatePhase('Showdown! Revelando as mãos…');
+  await delay(400);
+  state.players.forEach(p => {
+    p.evalResult = evaluateBest7(p.holeCards.concat(state.community));
+    p.revealed = true;
+  });
+  renderHoleCards();
+  renderPlayers();
+  await delay(300);
+
+  // ---- Pot payout: best hand among active bettors wins ----
+  const bettors = state.players.filter(p => p.bettingActive);
+  if (bettors.length > 0 && state.pot > 0) {
+    let best = bettors[0].evalResult;
+    bettors.forEach(p => { if (compareHands(p.evalResult, best) > 0) best = p.evalResult; });
+    const potWinners = bettors.filter(p => compareHands(p.evalResult, best) === 0);
+    const share = Math.floor(state.pot / potWinners.length);
+    potWinners.forEach(p => {
+      if (p.isHuman) { addPlayerCoins(share); p.raceWinnings += share; }
+      else { p.betCoins += share; }
+    });
+    log(`${potWinners.map(p => p.name).join(' e ')} venceu(ram) o pote de ${state.pot} moedas!`);
+  }
+
+  state.players.forEach(p => log(`${p.name}: ${p.evalResult.name} — avança ${p.evalResult.moveDistance} casa(s)!`));
+  updatePhase('Todos avançam conforme sua mão!');
+  await delay(700);
+
+  await moveEveryone();
+  renderPlayers();
+
+  await finishRoundOrContinue(playRoundHoldem);
+}
+
+async function concludeHoldemRace() {
+  const finishers = state.players.filter(p => p.position >= 100);
+  const champion = finishers.length > 0
+    ? finishers.slice().sort((a, b) => b.position - a.position)[0]
+    : state.players.slice().sort((a, b) => b.position - a.position)[0];
+  await delay(300);
+  endGame(champion);
+}
+
+// ---------------- Shared: check for finish, else continue ----------------
+async function finishRoundOrContinue(nextRoundFn) {
+  if (state.humanQuit) { await concludeHoldemRace(); return; }
+  const finishers = state.players.filter(p => p.position >= 100);
+  if (finishers.length > 0) {
+    await delay(500);
+    endGame(finishers[0]);
+    return;
+  }
+  state.round++;
+  await delay(800);
+  nextRoundFn();
+}
+
+function endGame(champion) {
+  const ranking = computeFinalRanking(state.players);
+  const human = state.players[0];
+  const humanRank = ranking.find(r => r.player === human);
+
+  if (state.mode === 'draw') {
+    const coinsEarned = DRAW_PAYOUT[humanRank.rank] || 0;
+    if (coinsEarned > 0) addPlayerCoins(coinsEarned);
+    state.lastPayout = coinsEarned;
+  } else {
+    const mult = HOLDEM_MULTIPLIER[humanRank.rank] || 0;
+    const bonus = human.raceWinnings * mult;
+    if (bonus > 0) addPlayerCoins(bonus);
+    state.lastPayout = bonus;
+    state.lastMultiplier = mult;
+  }
+
+  showScreen('screen-end');
+  $('#endTitle').textContent = champion.isHuman ? '🏆 VOCÊ VENCEU!' : `🏆 ${champion.name} VENCEU!`;
+  $('#endAvatar').innerHTML = `<img src="kart_${champion.color}_token.png" class="end-kart">`;
+  $('#endMessage').textContent = champion.isHuman
+    ? 'Você cruzou a linha de chegada primeiro. Grande Campeão do Poker Race!'
+    : `${champion.name} cruzou a linha de chegada primeiro.`;
+
+  const rankBox = $('#endRanking');
+  rankBox.innerHTML = ranking.map(r => `
+    <div class="rank-row${r.player.isHuman ? ' human' : ''}">
+      <span class="rank-num">${r.rank}º</span>
+      <img class="rank-kart" src="kart_${r.player.color}_token.png">
+      <span class="rank-name">${r.player.name}</span>
+      <span class="rank-pos">casa ${Math.min(r.player.position, 100)}</span>
+    </div>`).join('');
+
+  const payoutEl = $('#endPayout');
+  if (state.mode === 'draw') {
+    payoutEl.textContent = state.lastPayout > 0
+      ? `Você ganhou ${state.lastPayout} moedas (${humanRank.rank}º lugar)!`
+      : 'Nenhuma moeda desta vez — tente de novo!';
+  } else {
+    payoutEl.textContent = human.raceWinnings > 0
+      ? `Moedas ganhas nas apostas: ${human.raceWinnings} × ${state.lastMultiplier} (${humanRank.rank}º lugar) = ${state.lastPayout} moedas!`
+      : 'Você não ganhou nenhum pote nesta corrida.';
+  }
+  updateCoinsDisplay();
+}
+
+// ---------------- Screens ----------------
+function showScreen(id) {
+  $$('.screen').forEach(s => s.classList.remove('active'));
+  $('#' + id).classList.add('active');
+}
+
+function backToMenu() {
+  if (state && state.round > 1) {
+    const ok = confirm('Voltar ao menu principal? A corrida atual será perdida.');
+    if (!ok) return;
+  }
+  state = null;
+  showScreen('screen-start');
+  initSetupScreen();
+}
+
+async function startGame() {
+  state = {
+    players: createPlayers(setupBots, setupColor), deck: [], round: 1, phase: '',
+    mode: setupMode, community: [], pot: 0, humanQuit: false
+  };
+  showScreen('screen-game');
+  $('#logPanel').innerHTML = '';
+  await initBoard();
+  initCommunitySlots();
+  renderPlayers();
+  renderTokens();
+  log(state.mode === 'holdem' ? "A corrida começou! Modo Texas Hold'em. Boa sorte!" : 'A corrida começou! Boa sorte!');
+  $('#handActions').classList.add('hidden');
+  if (state.mode === 'holdem') {
+    playRoundHoldem();
+  } else {
+    playRoundDraw();
+  }
+}
+
+// ---------------- Init ----------------
+function initApp() {
+  initSetupScreen();
+  $('#btnStart').onclick = startGame;
+  $('#btnSwap').onclick = commitHumanDraw;
+  $('#btnRules').onclick = () => $('#rulesModal').classList.remove('hidden');
+  $('#btnRulesGame').onclick = () => $('#rulesModal').classList.remove('hidden');
+  $('#btnCloseRules').onclick = () => $('#rulesModal').classList.add('hidden');
+  $('#btnRestart').onclick = () => { showScreen('screen-start'); initSetupScreen(); };
+  $('#btnMenu').onclick = backToMenu;
+  wireZeroCoinsModal();
+  updateCoinsDisplay();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  }
+
+  window.addEventListener('resize', () => {
+    if (state) renderTokens();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initApp);

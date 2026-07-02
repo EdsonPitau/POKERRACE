@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Poker Race</title>
+<meta name="description" content="Poker Race — o jogo de tabuleiro onde a estratégia do poker encontra a emoção da corrida.">
+<meta name="theme-color" content="#12130f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-32.png">
+<style>
+:root{
+  --bg: #12130f;
+  --panel: #1b1d17;
+  --panel-2: #23261e;
+  --grass: #4d7f34;
+  --asphalt: #54565c;
+  --yellow: #f2c744;
+  --yellow-deep: #d9a91f;
+  --red: #d64545;
+  --blue: #3b74d1;
+  --green: #47a655;
+  --text: #f3f1e9;
+  --text-dim: #a7a692;
+  --border: #34362c;
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);overscroll-behavior:none;}
+body{display:flex;flex-direction:column;min-height:100vh;}
+h1,h2,h3{font-family:'Arial Black', Arial, sans-serif;letter-spacing:1px;text-transform:uppercase;margin:0;}
+button{font-family:inherit;cursor:pointer;}
+
+.screen{display:none;flex:1;flex-direction:column;min-height:100vh;}
+.screen.active{display:flex;}
+
+/* ---------- Start screen ---------- */
+#screen-start{align-items:center;justify-content:flex-start;padding:28px 20px 40px;text-align:center;gap:10px;
+  background: radial-gradient(circle at 50% -10%, #23261e 0%, #12130f 60%);}
+#screen-start .logo{width:140px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.6));margin-top:6px;}
+#screen-start h1{font-size:2.1rem;color:var(--yellow);text-shadow:2px 2px 0 #000;margin-top:6px;}
+.tagline{color:var(--text-dim);max-width:340px;margin:0 auto 10px;font-size:.92rem;line-height:1.4;}
+.setup-block{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin-top:8px;}
+.setup-block label{display:block;font-weight:700;font-size:.78rem;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);margin:14px 0 8px;text-align:left;}
+.setup-block label:first-child{margin-top:0;}
+.choice-row{display:flex;gap:8px;flex-wrap:wrap;}
+.choice-btn{flex:1;min-width:80px;background:var(--panel-2);border:2px solid var(--border);color:var(--text);border-radius:10px;padding:10px 6px;font-weight:700;font-size:.85rem;transition:.15s;}
+.choice-btn.active{border-color:var(--yellow);background:#2e2a15;color:var(--yellow);}
+.kart-choice{flex:1;min-width:74px;background:var(--panel-2);border:2px solid var(--border);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.kart-choice img{width:52px;height:auto;}
+.kart-choice span{font-size:.72rem;color:var(--text-dim);font-weight:600;}
+.kart-choice.active{border-color:var(--yellow);}
+.kart-choice.active span{color:var(--yellow);}
+.btn-primary{background:linear-gradient(180deg,var(--yellow),var(--yellow-deep));color:#1a1600;border:none;border-radius:12px;padding:15px 24px;font-weight:900;font-size:1rem;letter-spacing:1px;text-transform:uppercase;box-shadow:0 4px 0 #8f6f10, 0 6px 14px rgba(0,0,0,.4);margin-top:18px;width:100%;max-width:420px;}
+.btn-primary:active{transform:translateY(2px);box-shadow:0 2px 0 #8f6f10;}
+.btn-primary:disabled{opacity:.4;box-shadow:none;}
+.btn-secondary{background:transparent;border:2px solid var(--border);color:var(--text-dim);border-radius:10px;padding:10px 18px;font-weight:700;margin-top:10px;}
+
+/* ---------- Coins ---------- */
+.coins-badge{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--yellow-deep);border-radius:20px;padding:6px 14px;font-weight:800;font-size:.85rem;color:var(--yellow);margin:4px 0 2px;}
+.coins-badge .coin-icon{font-size:1rem;}
+.choice-btn.locked{opacity:.55;}
+.choice-btn.locked small{display:block;font-weight:600;font-size:.6rem;color:var(--text-dim);text-transform:none;letter-spacing:0;margin-top:2px;}
+.header-coins{display:flex;align-items:center;gap:4px;font-size:.72rem;font-weight:800;color:var(--yellow);background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:4px 10px;white-space:nowrap;}
+
+/* ---------- Game screen ---------- */
+#screen-game{padding:0;}
+.game-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;}
+.round-info{font-weight:800;font-size:.85rem;color:var(--text-dim);white-space:nowrap;}
+.round-info span{color:var(--yellow);}
+.phase-info{font-weight:700;font-size:.85rem;color:var(--text);flex:1;text-align:center;padding:0 10px;}
+.icon-btn{background:var(--panel-2);border:1px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:50%;font-weight:800;}
+.menu-btn{width:auto;border-radius:16px;padding:0 12px;font-size:.75rem;white-space:nowrap;}
+
+.players-strip{display:flex;gap:8px;overflow-x:auto;padding:10px 12px;background:#181a13;}
+.player-chip{display:flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:6px 10px;min-width:max-content;}
+.player-chip.human{border-color:var(--yellow);}
+.chip-kart{width:34px;}
+.chip-avatar{width:30px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #333;}
+.chip-name{font-size:.72rem;font-weight:800;}
+.chip-pos{font-size:.68rem;color:var(--text-dim);}
+.chip-hand{font-size:.66rem;color:var(--yellow);font-weight:700;}
+.chip-hand.muted{color:var(--text-dim);font-style:italic;font-weight:500;}
+
+.board-wrap{position:relative;width:100%;padding:8px 8px 4px;}
+#boardContainer{position:relative;width:100%;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.5);line-height:0;}
+#boardImage{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;}
+#tokenLayer{position:absolute;inset:0;pointer-events:none;}
+.kart-token{position:absolute;width:2.6%;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));}
+.kart-token.is-human{filter:drop-shadow(0 0 5px var(--yellow)) drop-shadow(0 2px 3px rgba(0,0,0,.6));}
+#communityLayer{position:absolute;inset:0;pointer-events:none;}
+.community-slot{position:absolute;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2%;}
+.community-slot.has-card{background:#fff;border:2px solid #1a1a1a;border-radius:6%;box-shadow:0 4px 10px rgba(0,0,0,.35);}
+.cc-rank{font-weight:900;font-size:clamp(9px,2.4vw,26px);line-height:1;}
+.cc-suit{font-weight:900;font-size:clamp(9px,2.4vw,26px);line-height:1;}
+
+.hand-panel{padding:10px 12px 4px;}
+.hand-cards{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;}
+.card{width:52px;height:74px;background:#fdfcf6;border-radius:8px;border:2px solid #222;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;box-shadow:0 3px 6px rgba(0,0,0,.4);transition:.15s;user-select:none;}
+.card-rank{font-weight:900;font-size:1.05rem;line-height:1;}
+.card-suit{font-size:1.3rem;line-height:1;}
+.card.selected{border-color:var(--red);transform:translateY(-10px);box-shadow:0 6px 10px rgba(0,0,0,.5);}
+.card.selected::after{content:"TROCAR";position:absolute;bottom:-16px;font-size:.5rem;color:var(--red);font-weight:800;letter-spacing:.5px;}
+
+.hand-actions{display:flex;justify-content:center;margin:14px 0 6px;}
+.hand-actions.hidden{display:none;}
+#btnSwap{max-width:320px;}
+
+.log-panel{flex:1;min-height:70px;max-height:120px;overflow-y:auto;margin:6px 12px 16px;padding:8px 10px;background:#0e0f0b;border:1px solid var(--border);border-radius:10px;font-size:.72rem;color:var(--text-dim);}
+.log-line{padding:2px 0;border-bottom:1px dashed #23241c;}
+.log-line:last-child{border-bottom:none;color:var(--text);}
+
+/* ---------- End screen ---------- */
+#screen-end{align-items:center;justify-content:center;text-align:center;padding:30px;gap:12px;background:radial-gradient(circle at 50% 20%, #2a2410 0%, #12130f 65%);}
+#endTitle{color:var(--yellow);font-size:1.8rem;text-shadow:2px 2px 0 #000;}
+.end-kart{width:140px;}
+.end-avatar{width:120px;height:160px;object-fit:cover;border-radius:8px;border:2px solid var(--yellow);}
+#endMessage{color:var(--text-dim);max-width:340px;}
+#endPayout{color:var(--yellow);font-weight:800;font-size:.95rem;max-width:360px;}
+.end-ranking{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px;margin-top:6px;}
+.rank-row{display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px solid var(--border);text-align:left;}
+.rank-row:last-child{border-bottom:none;}
+.rank-row.human{background:#2e2a15;border-radius:8px;}
+.rank-num{font-weight:900;color:var(--yellow);width:28px;flex-shrink:0;}
+.rank-kart{width:30px;flex-shrink:0;}
+.rank-name{flex:1;font-weight:700;font-size:.85rem;}
+.rank-pos{font-size:.7rem;color:var(--text-dim);}
+
+/* ---------- Betting panel (Hold'em) ---------- */
+.betting-panel{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:2px solid var(--yellow-deep);padding:16px;z-index:90;box-shadow:0 -6px 18px rgba(0,0,0,.5);}
+.betting-panel.hidden{display:none;}
+#bettingQuestion{font-weight:800;text-align:center;margin-bottom:10px;color:var(--yellow);}
+.betting-options{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+.bet-option-btn{flex:1;min-width:140px;max-width:220px;margin-top:0;}
+
+/* ---------- Modal ---------- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal.hidden{display:none;}
+.modal-box{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:480px;max-height:80vh;overflow-y:auto;}
+.modal-box h2{color:var(--yellow);margin-bottom:10px;font-size:1.1rem;}
+.modal-box p, .modal-box li{font-size:.85rem;color:var(--text-dim);line-height:1.5;}
+.modal-box ul{padding-left:18px;}
+.modal-box table{width:100%;border-collapse:collapse;margin:10px 0;font-size:.78rem;}
+.modal-box td{padding:4px 6px;border-bottom:1px solid var(--border);color:var(--text);}
+.modal-box td:last-child{text-align:right;color:var(--yellow);font-weight:700;}
+.modal-box button{width:100%;margin-top:8px;}
+
+@media (min-width:720px){
+  .board-wrap{max-width:1080px;margin:0 auto;}
+  .hand-panel,.players-strip,.log-panel{max-width:1080px;margin-left:auto;margin-right:auto;}
+}
+@media (min-width:1300px){
+  .board-wrap{max-width:1280px;}
+  .hand-panel,.players-strip,.log-panel{max-width:1280px;}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <section id="screen-start" class="screen active">
+    <img class="logo" src="logo.png" alt="Poker Race">
+    <h1>Poker Race</h1>
+    <p class="tagline">O jogo de tabuleiro onde a estratégia do poker encontra a emoção da corrida. Forme a melhor mão e dispare na pista!</p>
+    <div class="coins-badge"><span class="coin-icon">🪙</span> <span class="coins-value">0</span> moedas</div>
+    <div class="setup-block">
+      <label>Modo de jogo</label>
+      <div class="choice-row" id="modeChoices"></div>
+      <label>Quantos oponentes bots?</label>
+      <div class="choice-row" id="botCountChoices"></div>
+      <label>Escolha seu kart</label>
+      <div class="choice-row" id="kartColorChoices"></div>
+    </div>
+    <button id="btnStart" class="btn-primary">🏁 Começar Corrida</button>
+    <button id="btnRules" class="btn-secondary">Como jogar</button>
+  </section>
+
+  <section id="screen-game" class="screen">
+    <header class="game-header">
+      <button id="btnMenu" class="icon-btn menu-btn" title="Voltar ao Menu Principal">☰ Menu</button>
+      <div class="round-info">Rodada <span id="roundNum">1</span></div>
+      <div class="phase-info" id="phaseLabel">Preparando…</div>
+      <div class="header-coins">🪙 <span class="coins-value">0</span></div>
+      <button id="btnRulesGame" class="icon-btn">?</button>
+    </header>
+
+    <div class="players-strip" id="playersStrip"></div>
+
+    <div class="board-wrap">
+      <div id="boardContainer"></div>
+    </div>
+
+    <div class="hand-panel">
+      <div class="hand-cards" id="handCards"></div>
+      <div class="hand-actions hidden" id="handActions">
+        <button id="btnSwap" class="btn-primary">Manter Mão</button>
+      </div>
+    </div>
+
+    <div class="log-panel" id="logPanel"></div>
+
+    <div class="betting-panel hidden" id="bettingPanel">
+      <div id="bettingQuestion">Apostar?</div>
+      <div class="betting-options" id="bettingOptions"></div>
+    </div>
+  </section>
+
+  <section id="screen-end" class="screen">
+    <h1 id="endTitle">🏆 Vencedor!</h1>
+    <div id="endAvatar"></div>
+    <p id="endMessage"></p>
+    <p id="endPayout"></p>
+    <div class="end-ranking" id="endRanking"></div>
+    <button id="btnRestart" class="btn-primary">Jogar Novamente</button>
+  </section>
+
+  <div id="rulesModal" class="modal hidden">
+    <div class="modal-box">
+      <h2>Como jogar — V2</h2>
+      <p><b>Novidade:</b> agora <b>todos os jogadores avançam a cada rodada</b> — não só quem vence. A distância que cada um anda depende só da força da própria mão.</p>
+      <p><b>5-Card Draw:</b> todos recebem 5 cartas fechadas e escolhem quais trocar (0 a 5). Depois todos revelam e avançam conforme sua mão.</p>
+      <p><b>Texas Hold'em</b> (requer 1.000 moedas de saldo): você recebe 2 cartas fechadas. Aposte 5 moedas no pré-flop para participar das apostas seguintes (até 25 no flop/turn/river, nas casas "POKER RACE" do tabuleiro). Quem tem a melhor mão entre os apostadores leva o pote — mas <b>todos</b> avançam no tabuleiro conforme sua própria mão, apostando ou não.</p>
+      <table>
+        <tr><td>Royal Flush</td><td>10 casas</td></tr>
+        <tr><td>Straight Flush</td><td>9 casas</td></tr>
+        <tr><td>Quadra</td><td>8 casas</td></tr>
+        <tr><td>Full House</td><td>7 casas</td></tr>
+        <tr><td>Flush</td><td>6 casas</td></tr>
+        <tr><td>Straight</td><td>5 casas</td></tr>
+        <tr><td>Trinca</td><td>4 casas</td></tr>
+        <tr><td>Dois Pares</td><td>3 casas</td></tr>
+        <tr><td>Par</td><td>2 casas</td></tr>
+        <tr><td>Carta Alta</td><td>1 casa</td></tr>
+      </table>
+      <p><b>Casas cheias:</b> no máximo 2 carros por casa. Se sua casa de destino já tiver 2, você para na casa anterior livre.</p>
+      <p><b>Moedas:</b> no 5-Card Draw, o ranking final paga 100 / 50 / 25 / 0 moedas (1º ao 4º). No Hold'em, as moedas ganhas nas apostas são multiplicadas por 3x / 2x / 1x / 0x conforme sua posição final.</p>
+      <p>Chegue à casa 100 primeiro para ser o Grande Campeão!</p>
+      <button id="btnCloseRules" class="btn-secondary" style="width:100%;margin-top:6px;">Fechar</button>
+    </div>
+  </div>
+
+  <div id="zeroCoinsModal" class="modal hidden">
+    <div class="modal-box">
+      <h2>Sem moedas! 🪙</h2>
+      <p>Você ficou sem moedas para continuar apostando. O que deseja fazer?</p>
+      <button id="zeroContinueBtn" class="btn-primary">Continuar sem apostar</button>
+      <button id="zeroAdBtn" class="btn-secondary">📺 Assistir anúncio (+10 moedas)</button>
+      <p id="zeroAdLimitMsg" style="display:none;color:var(--red);font-weight:700;">Limite de anúncios atingido nesta corrida.</p>
+      <button id="zeroQuitBtn" class="btn-secondary">Desistir da corrida</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="engine.js"></script>
+<script src="board.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
