@@ -13,7 +13,9 @@ function resolveMovementTargets(players) {
   movers.forEach(m => {
     let target = m.raw;
     while (target > m.player.position) {
-      const occupants = results.filter(r => r.target === target).length;
+      // Compare by the physical cell on the 25-cell loop (cellInLap), not the raw absolute
+      // position — a cell on lap 1 and the "same" cell on lap 2+ are the same physical spot.
+      const occupants = results.filter(r => r.target < 100 && cellInLap(r.target) === cellInLap(target)).length;
       if (occupants < 2) break;
       target--;
     }
@@ -154,21 +156,47 @@ function check(name, cond) {
   check('6-card evaluator finds Royal Flush', r6.name === 'Royal Flush');
 }
 
-// ---- TEST 7: heading never anticipates a curve — the last cell of a straight keeps that
-// straight's own heading; only the FIRST cell of the new direction shows the new heading ----
+// ---- TEST 7: heading around the new 25-cell loop (4 laps x 25 = 100 casas) — checks the
+// corner transitions land on the correct cell, not one early or late ----
 {
-  // cell 17 = last cell of the top straight (heading LEFT=0); the turn (DOWN=270) should
-  // only appear starting at cell 18, not at 17.
-  check('cell17 still faces LEFT (0) — same as the rest of the top straight', cellHeadingDeg(17) === 0);
-  check('cell18 faces DOWN (270) — the new direction, only once actually there', cellHeadingDeg(18) === 270);
-  // cell 54 = last cell of the inner-down lane (DOWN=270); turn to RIGHT happens at 55, not 54.
-  check('cell54 still faces DOWN (270)', cellHeadingDeg(54) === 270);
-  check('cell55 faces RIGHT (180)', cellHeadingDeg(55) === 180);
-  // symmetric checks on the other corners
-  check('cell31 still faces DOWN (270)', cellHeadingDeg(31) === 270);
-  check('cell32 faces RIGHT (180)', cellHeadingDeg(32) === 180);
-  check('cell65 still faces RIGHT (180)', cellHeadingDeg(65) === 180);
-  check('cell66 faces UP (90)', cellHeadingDeg(66) === 90);
+  check('cell6 still faces LEFT (0) — end of the top row', cellHeadingDeg(6) === 0);
+  check('cell7 faces DOWN (270) — start of the left side', cellHeadingDeg(7) === 270);
+  check('cell10 still faces DOWN (270) — end of the left side', cellHeadingDeg(10) === 270);
+  check('cell11 faces RIGHT (180) — start of the bottom row', cellHeadingDeg(11) === 180);
+  check('cell19 still faces RIGHT (180) — end of the bottom row', cellHeadingDeg(19) === 180);
+  check('cell20 faces UP (90) — start of the right side', cellHeadingDeg(20) === 90);
+  check('cell23 still faces UP (90) — end of the right side', cellHeadingDeg(23) === 90);
+  check('cell24 faces LEFT (0) — back onto the top row, toward the finish line', cellHeadingDeg(24) === 0);
+  check('cell25 (finish) faces LEFT (0)', cellHeadingDeg(25) === 0);
+  // headings must also work for absolute positions beyond lap 1 (e.g. position 32 = lap2 cell7)
+  check('position 32 (lap 2, cell 7) faces DOWN (270), same as cell7', cellHeadingDeg(32) === 270);
+  check('position 76 (lap 4, cell 1) faces LEFT (0), same as cell1', cellHeadingDeg(76) === 0);
+}
+
+// ---- TEST 8: lap/cell mapping is correct at every lap boundary ----
+{
+  check('position 1 = lap 1, cell 1', lapOf(1) === 1 && cellInLap(1) === 1);
+  check('position 25 = lap 1, cell 25 (end of lap 1)', lapOf(25) === 1 && cellInLap(25) === 25);
+  check('position 26 = lap 2, cell 1 (start of lap 2)', lapOf(26) === 2 && cellInLap(26) === 1);
+  check('position 50 = lap 2, cell 25', lapOf(50) === 2 && cellInLap(50) === 25);
+  check('position 51 = lap 3, cell 1', lapOf(51) === 3 && cellInLap(51) === 1);
+  check('position 100 = lap 4, cell 25 (finish)', lapOf(100) === 4 && cellInLap(100) === 25);
+}
+
+// ---- TEST 9: two karts on DIFFERENT laps landing on the same physical cell still respect
+// the 2-per-cell cap, since the board loops every 25 cells ----
+{
+  const hand = evaluateHand(C('AS KS QS JS TS'));
+  // P1 is already on lap 2 sitting at cell 5 (position 30). P2 and P3 are finishing lap 1 and
+  // would also land on cell 5 (position 5) — that's the SAME physical cell as P1's.
+  const P1 = { name: 'P1', position: 30, evalResult: { ...hand, moveDistance: 0, category: 9, tiebreak: [14] } };
+  const P2 = { name: 'P2', position: 3, evalResult: { ...hand, moveDistance: 2, category: 8, tiebreak: [13] } }; // raw target 5
+  const P3 = { name: 'P3', position: 4, evalResult: { ...hand, moveDistance: 1, category: 0, tiebreak: [2] } }; // raw target 5
+  const results = resolveMovementTargets([P1, P2, P3]);
+  const cellsUsed = results.map(r => ({ name: r.player.name, cell: cellInLap(r.target) }));
+  const atCell5 = cellsUsed.filter(c => c.cell === 5).length;
+  check('no more than 2 karts share cell 5 across laps', atCell5 <= 2);
+  console.log('  -> cross-lap targets:', cellsUsed.map(c => `${c.name}:cell${c.cell}`).join(', '));
 }
 
 console.log('\\n=== TOTAL FAILURES:', failures, '===');

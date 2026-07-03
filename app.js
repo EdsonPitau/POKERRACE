@@ -108,9 +108,9 @@ function initBoard() {
   return new Promise(resolve => {
     tokenElements = new Map();
     $('#boardContainer').innerHTML = `
-      <img id="boardImage" src="board_bg.jpg" alt="Tabuleiro Poker Race" draggable="false">
+      <img id="boardImage" src="board_start.jpg" alt="Tabuleiro Poker Race" draggable="false">
       <div id="tokenLayer"></div>
-      <div id="communityLayer"></div>`;
+      <div id="raceInfoPanel" class="hidden"></div>`;
     const img = document.getElementById('boardImage');
     if (img.complete && img.naturalWidth > 0) {
       resolve();
@@ -121,20 +121,45 @@ function initBoard() {
   });
 }
 
+// Swaps from the start-line splash art to the live race background, revealing the dynamic
+// info panel — called once when the very first round actually begins (green light moment).
+function switchToRaceBoard() {
+  const img = document.getElementById('boardImage');
+  const panel = document.getElementById('raceInfoPanel');
+  if (img) img.src = 'board_bg.jpg';
+  if (panel) panel.classList.remove('hidden');
+}
+
+// Small always-on panel drawn over the top-left corner of the board (matching the spot left
+// blank in the artwork for this), showing each player's color, name, and current position on
+// the loop — "Casa X" plus "Volta Y" since the board now wraps every 25 cells (4 laps = 100).
+function renderRaceInfoPanel() {
+  const panel = document.getElementById('raceInfoPanel');
+  if (!panel || !state) return;
+  panel.innerHTML = state.players.map(p => {
+    const lap = p.position <= 0 ? 1 : lapOf(Math.min(p.position, 100));
+    const cell = p.position <= 0 ? 0 : cellInLap(Math.min(p.position, 100));
+    const posText = p.position <= 0 ? 'Casa 0' : `Casa ${cell} · Volta ${lap}/4`;
+    return `<div class="race-info-row">
+      <span class="race-info-swatch" style="background:var(--${p.color})"></span>
+      <span class="race-info-name">${p.name}</span>
+      <span class="race-info-pos">${posText}</span>
+    </div>`;
+  }).join('');
+}
+
 function initCommunitySlots() {
-  const layer = document.getElementById('communityLayer');
-  if (!layer) return;
-  layer.innerHTML = '';
-  communitySlotsPercent().forEach((slot, i) => {
+  const label = document.getElementById('communityPanelLabel');
+  if (label) label.textContent = state.mode === 'holdem' ? 'Cartas comunitárias' : 'Melhor mão da rodada';
+  const row = document.getElementById('communityCardsRow');
+  if (!row) return;
+  row.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
     const div = document.createElement('div');
     div.className = 'community-slot';
     div.id = 'community-slot-' + i;
-    div.style.left = slot.left + '%';
-    div.style.top = slot.top + '%';
-    div.style.width = slot.width + '%';
-    div.style.height = slot.height + '%';
-    layer.appendChild(div);
-  });
+    row.appendChild(div);
+  }
 }
 
 function updateCommunitySlots(cards) {
@@ -160,7 +185,11 @@ function renderTokens() {
   const groups = {};
   state.players.forEach(p => {
     const clamped = Math.max(0, Math.min(p.position, 100));
-    (groups[clamped] = groups[clamped] || []).push(p);
+    // Group by the physical cell on the loop, not the raw absolute position — two karts on
+    // different laps can land on the same visual cell and need to share it like any other
+    // collision, not silently stack on top of each other.
+    const visualKey = clamped === 0 ? 0 : cellInLap(clamped);
+    (groups[visualKey] = groups[visualKey] || []).push(p);
   });
 
   // Cars share a lane side-by-side, perpendicular to the direction of travel. Offsets below
@@ -256,15 +285,18 @@ function renderPlayers() {
     } else {
       statusHtml = `<div class="chip-hand muted">pronto</div>`;
     }
+    const clamped = Math.min(p.position, 100);
+    const posLabel = clamped <= 0 ? 'Casa 0' : `Casa ${cellInLap(clamped)} · V${lapOf(clamped)}/4`;
     card.innerHTML = `
       ${avatarHtml}
       <div class="chip-info">
         <div class="chip-name">${p.name}</div>
-        <div class="chip-pos">Casa ${Math.min(p.position, 100)}</div>
+        <div class="chip-pos">${posLabel}</div>
         ${statusHtml}
       </div>`;
     strip.appendChild(card);
   });
+  renderRaceInfoPanel();
 }
 
 // ---------------- Hint: probability-based discard suggestion (5-card draw) ----------------
@@ -595,7 +627,10 @@ function resolveMovementTargets(players, stationaryPlayers, distanceOverrides) {
   movers.forEach(m => {
     let target = m.raw;
     while (target > m.player.position) {
-      const occupants = results.filter(r => r.target === target).length;
+      // Compare by the physical cell on the loop (cellInLap), not the raw position — a cell on
+      // lap 1 and the "same" cell on lap 2 are the same physical spot on the board and must
+      // share the 2-per-cell cap together.
+      const occupants = results.filter(r => r.target < 100 && cellInLap(r.target) === cellInLap(target)).length;
       if (occupants < 2) break;
       target--;
     }
@@ -949,6 +984,9 @@ async function startGame() {
   initCommunitySlots();
   renderPlayers();
   renderTokens();
+  await delay(1600); // let the start-line splash (lights, "000" board) hold for a moment
+  switchToRaceBoard();
+  renderPlayers(); // refresh now that the info panel is visible
   log(state.mode === 'holdem' ? "A corrida começou! Modo Texas Hold'em. Boa sorte!" : 'A corrida começou! Boa sorte!');
   $('#handActions').classList.add('hidden');
   if (state.mode === 'holdem') {

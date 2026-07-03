@@ -128,35 +128,9 @@ function evaluateBestN(cardsN) {
 
 function evaluateBest7(cards7) { return evaluateBestN(cards7); }
 
-// ---------- Board coordinate map (exact spiral layout, 100 cells) ----------
-function buildBoardCells() {
-  const cells = {};
-  for (let k = 0; k < 17; k++) cells[1 + k] = { col: 16 - k, row: 0 };
-  for (let r = 1; r <= 14; r++) cells[18 + (r - 1)] = { col: 0, row: r };
-  cells[32] = { col: 1, row: 14 };
-  cells[33] = { col: 2, row: 14 };
-  for (let i = 0; i < 12; i++) cells[34 + i] = { col: 2, row: Math.max(2, 12 - i) };
-  cells[46] = { col: 3, row: 2 };
-  cells[47] = { col: 4, row: 2 };
-  for (let i = 0; i < 7; i++) cells[48 + i] = { col: 4, row: 2 + i };
-  cells[55] = { col: 4, row: 10 };
-  for (let i = 0; i < 9; i++) cells[56 + i] = { col: 5 + i, row: 10 };
-  cells[65] = { col: 14, row: 10 };
-  for (let i = 0; i < 7; i++) cells[66 + i] = { col: 14, row: 8 - i };
-  cells[73] = { col: 14, row: 2 };
-  cells[74] = { col: 15, row: 2 };
-  cells[75] = { col: 16, row: 2 };
-  for (let i = 0; i < 11; i++) cells[76 + i] = { col: 16, row: 2 + i };
-  cells[87] = { col: 16, row: 13 };
-  cells[88] = { col: 17, row: 13 };
-  cells[89] = { col: 18, row: 13 };
-  for (let i = 0; i < 11; i++) cells[90 + i] = { col: 18, row: 12 - i };
-  return cells;
-}
-
-const BOARD_CELLS = buildBoardCells();
-const BOARD_COLS = 19;
-const BOARD_ROWS = 15;
+// Note: the board coordinate map (which cell sits where on the artwork) now lives in board.js
+// as the 25-cell loop calibration — this file only cares about game logic (deck, hand
+// evaluation, bot AI), not board geometry.
 
 // ---------- Bot AI ----------
 function botChooseDiscards(cards, ctx) {

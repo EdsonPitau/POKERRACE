@@ -1,4 +1,4 @@
-const CACHE_NAME = 'poker-race-v7';
+const CACHE_NAME = 'poker-race-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './manifest.json',
   './logo.png',
   './board_bg.jpg',
+  './board_start.jpg',
   './kart_yellow_token.png',
   './kart_blue_token.png',
   './kart_green_token.png',
