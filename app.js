@@ -278,35 +278,50 @@ function sampleDistinct(pool, k) {
   return out;
 }
 
-function analyzeDiscardOptions(hand) {
+function analyzeDiscardOptions(hand, opponentCount) {
   const handIds = new Set(hand.map(c => c.id));
   const pool = freshDeck().filter(c => !handIds.has(c.id)); // 47 unseen cards
-  const TRIALS = 2500;
-  const currentDistance = evaluateHand(hand).moveDistance;
+  const TRIALS = 800;
+  const current = evaluateHand(hand);
+  const currentDistance = current.moveDistance;
   const options = [];
   for (let mask = 0; mask < 32; mask++) {
     const discardIdx = [], keepIdx = [];
     for (let i = 0; i < 5; i++) { if (mask & (1 << i)) discardIdx.push(i); else keepIdx.push(i); }
     const keepCards = keepIdx.map(i => hand[i]);
-    let expected, pBig, pWorse;
-    if (discardIdx.length === 0) {
-      expected = currentDistance;
-      pBig = currentDistance >= 5 ? 1 : 0; // Straight (5 casas) or better
-      pWorse = 0; // standing pat can't make your own hand worse
-    } else {
-      let total = 0, bigCount = 0, worseCount = 0;
-      for (let t = 0; t < TRIALS; t++) {
-        const sample = sampleDistinct(pool, discardIdx.length);
-        const d = evaluateHand(keepCards.concat(sample)).moveDistance;
-        total += d;
-        if (d >= 5) bigCount++;
-        if (d < currentDistance) worseCount++;
+    let winTotal = 0, bigCount = 0, worseCount = 0, kickerTotal = 0;
+    for (let t = 0; t < TRIALS; t++) {
+      const ourHand = discardIdx.length === 0 ? hand : keepCards.concat(sampleDistinct(pool, discardIdx.length));
+      const ourEval = evaluateHand(ourHand);
+
+      // Opponents' cards are unknown, so model them as random hands drawn from the same
+      // unseen pool (a simplification — real bots also try to improve their hand, so this
+      // is a slight underestimate of how tough they are, but it's the best we can do without
+      // seeing their cards). Only count the move if we actually beat (or tie) everyone —
+      // that's what the "only the best hand advances" rule really requires.
+      const usedIds = new Set(ourHand.map(c => c.id));
+      const remaining = pool.filter(c => !usedIds.has(c.id));
+      const oppCards = sampleDistinct(remaining, 5 * opponentCount);
+      let weWin = true;
+      for (let o = 0; o < opponentCount; o++) {
+        const oppEval = evaluateHand(oppCards.slice(o * 5, o * 5 + 5));
+        if (compareHands(oppEval, ourEval) > 0) { weWin = false; break; }
       }
-      expected = total / TRIALS;
-      pBig = bigCount / TRIALS;
-      pWorse = worseCount / TRIALS;
+
+      winTotal += weWin ? ourEval.moveDistance : 0;
+      kickerTotal += ourEval.tiebreak[0]; // the rank that decides ties within the same category
+                                          // against opponents (e.g. the lone high card when
+                                          // everyone's stuck on Carta Alta, or the pair's rank)
+      if (ourEval.moveDistance >= 5) bigCount++;
+      if (ourEval.moveDistance < currentDistance) worseCount++;
     }
-    options.push({ discardIdx, expected, pBig, pWorse });
+    options.push({
+      discardIdx,
+      expected: winTotal / TRIALS, // now already weighted by chance of actually winning the round
+      pBig: bigCount / TRIALS,
+      pWorse: worseCount / TRIALS,
+      avgTopKicker: kickerTotal / TRIALS
+    });
   }
   return options;
 }
@@ -329,22 +344,40 @@ function raceUrgency(human, allPlayers) {
   return 'normal';
 }
 
+// Small, principled nudge toward the higher kicker: it only matters when your final category
+// ties an opponent's (whoever has the best hand advances — everyone else stays put), so it's
+// weighted lightly enough to never override a real difference in expected casas advanced.
+const KICKER_WEIGHT = 0.4;
+
 function pickBestOption(options, urgency) {
   const scored = options.map(o => {
-    let score = o.expected;
-    if (urgency === 'aggressive') score = o.expected + o.pBig * 3;       // reward upside potential
-    if (urgency === 'conservative') score = o.expected - o.pWorse * 4;   // punish downside risk
+    let score = o.expected + KICKER_WEIGHT * (o.avgTopKicker - 8) / 6;
+    if (urgency === 'aggressive') score += o.pBig * 3;       // reward upside potential
+    if (urgency === 'conservative') score -= o.pWorse * 4;   // punish downside risk
     return { ...o, score };
   });
-  scored.sort((a, b) => b.score - a.score || a.discardIdx.length - b.discardIdx.length);
+  scored.sort((a, b) => b.score - a.score);
   return scored[0];
 }
 
 function showHint() {
+  const btn = $('#btnHint');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Calculando...';
+  setTimeout(() => {
+    computeAndApplyHint();
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }, 20); // let the browser paint the "Calculando..." state before the heavy simulation blocks the thread
+}
+
+function computeAndApplyHint() {
   const human = state.players[0];
-  const current = evaluateHand(human.hand).moveDistance;
   const urgency = raceUrgency(human, state.players);
-  const options = analyzeDiscardOptions(human.hand);
+  const opponentCount = state.players.length - 1;
+  const options = analyzeDiscardOptions(human.hand, opponentCount);
+  const standPat = options.find(o => o.discardIdx.length === 0);
   const best = pickBestOption(options, urgency);
   selectedDiscards = new Set(best.discardIdx);
   renderHand();
@@ -357,14 +390,14 @@ function showHint() {
   }[urgency];
 
   if (best.discardIdx.length === 0) {
-    log(`Dica: manter a mão é a melhor opção (ganho esperado: ${current} casa(s)).${profileNote}`);
+    log(`Dica: manter a mão é a melhor opção (chance real de vencer a rodada considerando os adversários: ${(standPat.expected).toFixed(1)} casa(s) esperadas).${profileNote}`);
   } else {
     const extra = urgency === 'aggressive'
       ? ` — ${(best.pBig * 100).toFixed(0)}% de chance de sair com Straight ou melhor`
       : urgency === 'conservative'
         ? ` — só ${(best.pWorse * 100).toFixed(0)}% de risco de piorar`
         : '';
-    log(`Dica: troque ${best.discardIdx.length} carta(s) (ganho médio esperado: ${best.expected.toFixed(1)} casa(s), contra ${current} mantendo tudo${extra}).${profileNote}`);
+    log(`Dica: troque ${best.discardIdx.length} carta(s) (ganho médio esperado: ${best.expected.toFixed(1)} casa(s), contra ${standPat.expected.toFixed(1)} mantendo tudo${extra}).${profileNote}`);
   }
 }
 
