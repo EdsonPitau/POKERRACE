@@ -645,6 +645,7 @@ async function moveEveryone() {
       log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
     }
   });
+  revealRaceBoardIfNeeded();
   await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
 }
 
@@ -665,6 +666,7 @@ async function moveWinnersOnly(winners, allPlayers) {
       log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
     }
   });
+  revealRaceBoardIfNeeded();
   await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
 }
 
@@ -975,7 +977,7 @@ function backToMenu() {
 async function startGame() {
   state = {
     players: createPlayers(setupBots, setupColor), deck: [], round: 1, phase: '',
-    mode: setupMode, community: [], pot: 0, humanQuit: false
+    mode: setupMode, community: [], pot: 0, humanQuit: false, raceStarted: false
   };
   showScreen('screen-game');
   $('#logPanel').innerHTML = '';
@@ -983,9 +985,6 @@ async function startGame() {
   initCommunitySlots();
   renderPlayers();
   renderTokens();
-  await delay(1600); // let the start-line splash (lights, "000" board) hold for a moment
-  switchToRaceBoard();
-  renderPlayers(); // refresh now that the info panel is visible
   log(state.mode === 'holdem' ? "A corrida começou! Modo Texas Hold'em. Boa sorte!" : 'A corrida começou! Boa sorte!');
   $('#handActions').classList.add('hidden');
   if (state.mode === 'holdem') {
@@ -993,6 +992,16 @@ async function startGame() {
   } else {
     playRoundDraw();
   }
+}
+
+// The very first time any kart actually moves (the result of the first card exchange), swap
+// from the start-line splash art to the live race background and reveal the dynamic info panel.
+// Guarded so it only fires once per race, exactly at that moment — not before.
+function revealRaceBoardIfNeeded() {
+  if (state.raceStarted) return;
+  state.raceStarted = true;
+  switchToRaceBoard();
+  renderPlayers();
 }
 
 // ---------------- Init ----------------
