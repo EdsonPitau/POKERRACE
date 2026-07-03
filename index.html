@@ -89,11 +89,21 @@ button{font-family:inherit;cursor:pointer;}
 #tokenLayer{position:absolute;inset:0;pointer-events:none;}
 .kart-token{position:absolute;width:2.6%;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));transition:left .11s linear, top .11s linear, transform .11s linear;}
 .kart-token.is-human{filter:drop-shadow(0 0 5px var(--yellow)) drop-shadow(0 2px 3px rgba(0,0,0,.6));}
-#communityLayer{position:absolute;inset:0;pointer-events:none;}
-.community-slot{position:absolute;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2%;}
-.community-slot.has-card{background:#fff;border:2px solid #1a1a1a;border-radius:6%;box-shadow:0 4px 10px rgba(0,0,0,.35);}
-.cc-rank{font-weight:900;font-size:clamp(9px,2.4vw,26px);line-height:1;}
-.cc-suit{font-weight:900;font-size:clamp(9px,2.4vw,26px);line-height:1;}
+
+#raceInfoPanel{position:absolute;left:12.5%;top:19%;width:23%;display:flex;flex-direction:column;gap:3%;pointer-events:none;}
+#raceInfoPanel.hidden{display:none;}
+.race-info-row{display:flex;align-items:center;gap:6%;background:rgba(10,10,10,.72);border-radius:5px;padding:2.5% 4%;}
+.race-info-swatch{width:14%;aspect-ratio:1;border-radius:3px;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.4);}
+.race-info-name{flex:1;color:#fff;font-weight:800;font-size:clamp(7px,1.4vw,14px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.race-info-pos{color:#fff;font-weight:700;font-size:clamp(6px,1.2vw,12px);background:rgba(255,255,255,.15);border-radius:4px;padding:1.5% 4%;white-space:nowrap;}
+
+.community-panel{padding:6px 12px 0;}
+.community-panel-label{text-align:center;color:var(--text-dim);font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px;}
+.community-cards-row{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;}
+.community-slot{width:52px;height:74px;box-sizing:border-box;border-radius:8px;border:2px dashed rgba(255,255,255,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
+.community-slot.has-card{background:#fdfcf6;border:2px solid #222;box-shadow:0 3px 6px rgba(0,0,0,.4);}
+.cc-rank{font-weight:900;font-size:1.05rem;line-height:1;}
+.cc-suit{font-weight:900;font-size:1.4rem;line-height:1;}
 
 .hand-panel{padding:10px 12px 4px;}
 .hand-cards{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;}
@@ -190,6 +200,11 @@ button{font-family:inherit;cursor:pointer;}
 
     <div class="board-wrap">
       <div id="boardContainer"></div>
+    </div>
+
+    <div class="community-panel">
+      <div class="community-panel-label" id="communityPanelLabel">Melhor mão da rodada</div>
+      <div class="community-cards-row" id="communityCardsRow"></div>
     </div>
 
     <div class="hand-panel">
