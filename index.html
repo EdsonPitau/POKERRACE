@@ -103,7 +103,7 @@ button{font-family:inherit;cursor:pointer;}
 .card.selected{border-color:var(--red);transform:translateY(-10px);box-shadow:0 6px 10px rgba(0,0,0,.5);}
 .card.selected::after{content:"TROCAR";position:absolute;bottom:-16px;font-size:.5rem;color:var(--red);font-weight:800;letter-spacing:.5px;}
 
-.hand-actions{display:flex;justify-content:center;margin:14px 0 6px;}
+.hand-actions{display:flex;justify-content:center;align-items:center;gap:10px;margin:14px 0 6px;flex-wrap:wrap;}
 .hand-actions.hidden{display:none;}
 #btnSwap{max-width:320px;}
 
@@ -195,6 +195,7 @@ button{font-family:inherit;cursor:pointer;}
     <div class="hand-panel">
       <div class="hand-cards" id="handCards"></div>
       <div class="hand-actions hidden" id="handActions">
+        <button id="btnHint" class="btn-secondary">💡 Dica</button>
         <button id="btnSwap" class="btn-primary">Manter Mão</button>
       </div>
     </div>
@@ -219,8 +220,8 @@ button{font-family:inherit;cursor:pointer;}
   <div id="rulesModal" class="modal hidden">
     <div class="modal-box">
       <h2>Como jogar — V2</h2>
-      <p><b>Novidade:</b> no <b>Texas Hold'em</b>, <b>todos os jogadores avançam a cada rodada</b> — não só quem vence. Já no <b>5-Card Draw</b>, só quem fizer a melhor mão da rodada avança (em caso de empate técnico, todos os empatados avançam).</p>
-      <p><b>5-Card Draw:</b> todos recebem 5 cartas fechadas e escolhem quais trocar (0 a 5). Depois todos revelam — só a melhor mão da rodada avança na pista.</p>
+      <p><b>Novidade:</b> no <b>Texas Hold'em</b>, <b>todos os jogadores avançam a cada rodada</b> — não só quem vence. Já no <b>5-Card Draw</b>, só quem fizer a melhor mão da rodada avança a distância cheia; quem fizer a <b>segunda melhor mão</b> avança metade da distância (arredondado pra baixo); os demais ficam parados. Em caso de empate técnico, todos os empatados avançam.</p>
+      <p><b>5-Card Draw:</b> todos recebem 5 cartas fechadas e escolhem quais trocar (0 a 5). Depois todos revelam — a melhor mão avança na pista, a segunda melhor avança pela metade.</p>
       <p><b>Texas Hold'em</b> (requer 1.000 moedas de saldo): você recebe 2 cartas fechadas. Aposte 5 moedas no pré-flop para participar das apostas seguintes (até 25 no flop/turn/river, nas casas "POKER RACE" do tabuleiro). Quem tem a melhor mão entre os apostadores leva o pote — e <b>todos</b> avançam no tabuleiro conforme sua própria mão, apostando ou não.</p>
       <table>
         <tr><td>Royal Flush</td><td>10 casas</td></tr>

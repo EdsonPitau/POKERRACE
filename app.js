@@ -252,6 +252,57 @@ function renderPlayers() {
   });
 }
 
+// ---------------- Hint: probability-based discard suggestion (5-card draw) ----------------
+function sampleDistinct(pool, k) {
+  const usedIdx = new Set();
+  const out = [];
+  while (out.length < k) {
+    const idx = Math.floor(Math.random() * pool.length);
+    if (!usedIdx.has(idx)) { usedIdx.add(idx); out.push(pool[idx]); }
+  }
+  return out;
+}
+
+function analyzeDiscardOptions(hand) {
+  const handIds = new Set(hand.map(c => c.id));
+  const pool = freshDeck().filter(c => !handIds.has(c.id)); // 47 unseen cards
+  const TRIALS = 2500;
+  const options = [];
+  for (let mask = 0; mask < 32; mask++) {
+    const discardIdx = [], keepIdx = [];
+    for (let i = 0; i < 5; i++) { if (mask & (1 << i)) discardIdx.push(i); else keepIdx.push(i); }
+    const keepCards = keepIdx.map(i => hand[i]);
+    let expected;
+    if (discardIdx.length === 0) {
+      expected = evaluateHand(hand).moveDistance;
+    } else {
+      let total = 0;
+      for (let t = 0; t < TRIALS; t++) {
+        const sample = sampleDistinct(pool, discardIdx.length);
+        total += evaluateHand(keepCards.concat(sample)).moveDistance;
+      }
+      expected = total / TRIALS;
+    }
+    options.push({ discardIdx, expected });
+  }
+  options.sort((a, b) => b.expected - a.expected || a.discardIdx.length - b.discardIdx.length);
+  return options[0];
+}
+
+function showHint() {
+  const human = state.players[0];
+  const current = evaluateHand(human.hand).moveDistance;
+  const best = analyzeDiscardOptions(human.hand);
+  selectedDiscards = new Set(best.discardIdx);
+  renderHand();
+  updateSwapButton();
+  if (best.discardIdx.length === 0) {
+    log(`Dica: manter a mão é a melhor opção (ganho esperado: ${current} casa(s)).`);
+  } else {
+    log(`Dica: troque ${best.discardIdx.length} carta(s) (ganho médio esperado: ${best.expected.toFixed(1)} casa(s), contra ${current} mantendo tudo).`);
+  }
+}
+
 // ---------------- Rendering: hand (5-card draw) ----------------
 function renderHand() {
   const human = state.players[0];
@@ -430,9 +481,11 @@ async function animateMoveTo(player, target) {
 // of hand strength (best first), each taking its desired cell if there's room, otherwise
 // backing off one cell at a time until it finds a free spot. `stationaryPlayers` (optional)
 // are players who are NOT moving this round but still occupy their current cell, so movers
-// correctly cascade around them too (used by 5-Card Draw, where only the winner advances).
-function resolveMovementTargets(players, stationaryPlayers) {
-  const withRaw = players.map(p => ({ player: p, raw: p.position + p.evalResult.moveDistance }));
+// correctly cascade around them too. `distanceOverrides` (optional Map) lets a player move a
+// distance other than their hand's full moveDistance (used for the 5-Card Draw runner-up rule).
+function resolveMovementTargets(players, stationaryPlayers, distanceOverrides) {
+  const distanceFor = p => (distanceOverrides && distanceOverrides.has(p)) ? distanceOverrides.get(p) : p.evalResult.moveDistance;
+  const withRaw = players.map(p => ({ player: p, raw: p.position + distanceFor(p) }));
   const finishers = withRaw.filter(w => w.raw >= 100);
   const movers = withRaw.filter(w => w.raw < 100)
     .sort((a, b) => compareHands(b.player.evalResult, a.player.evalResult));
@@ -812,6 +865,7 @@ function initApp() {
   initSetupScreen();
   $('#btnStart').onclick = startGame;
   $('#btnSwap').onclick = commitHumanDraw;
+  $('#btnHint').onclick = showHint;
   $('#btnRules').onclick = () => $('#rulesModal').classList.remove('hidden');
   $('#btnRulesGame').onclick = () => $('#rulesModal').classList.remove('hidden');
   $('#btnCloseRules').onclick = () => $('#rulesModal').classList.add('hidden');
