@@ -63,7 +63,7 @@ function cellCenterPercent(position) {
   if (position <= 0) {
     // "casa 0" — decorative starting spot, just outside cell 1, clear of the checkered line
     const c1 = LOOP_CELLS[1];
-    return { x: c1.x + 3.2, y: c1.y };
+    return { x: c1.x + 4.6, y: c1.y };
   }
   const c = LOOP_CELLS[cellInLap(position)];
   if (!c) return { x: 50, y: 50 };
