@@ -17,14 +17,18 @@ function cellCenterPercent(num) {
     // "casa 0" — the starting grid, well clear of cell 1's checkered line, in the decorative gate area
     return { x: 92.5, y: (GRID_Y0 / BOARD_IMG_H) * 100 };
   }
-  if (num === 88) {
-    // The board art has a small decorative green notch cut into the middle of this corner
-    // stub (verified by pixel-scanning: 87 and 89 on either side sit cleanly on the road,
-    // but 88's normal grid position lands in the notch) — nudge down to the real road strip
-    // just below it, still well inside cell 88's own bounds.
-    const c = BOARD_CELLS[88];
+  if (num === 87 || num === 88 || num === 89) {
+    // This corner stub's cells were computed from the generic row grid, but the artwork's
+    // real drivable strip here is offset from that grid (and 88 has a decorative green notch
+    // cut into its top edge — see comment on COMMUNITY_ILLUSTRATION above). Verified with a
+    // full-width pixel scan of the 84-92 corner (not just single-column sampling, which had
+    // caught a thin decorative border-shadow line and mistaken it for open road): the real
+    // stub connecting cells 86 and 90 is a clean, wide grey band from ~94.6% to ~97.7% of the
+    // board's height. Centering all three cells in that band keeps them clear of both the
+    // notch above and the track's outer red/white border below.
+    const c = BOARD_CELLS[num];
     const px = GRID_X0 + c.col * GRID_COLW;
-    const py = GRID_Y0 + c.row * GRID_ROWH + 220;
+    const py = 6043.0;
     return { x: (px / BOARD_IMG_W) * 100, y: (py / BOARD_IMG_H) * 100 };
   }
   const c = BOARD_CELLS[num];
