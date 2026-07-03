@@ -193,11 +193,11 @@ function renderTokens() {
   });
 
   // Cars share a lane side-by-side, perpendicular to the direction of travel. Offsets below
-  // are sized so two karts overlap only slightly (~12%) instead of floating apart with a gap
-  // (matching the reference artwork) while always staying inside the cell's own bounds —
-  // verified against the actual cell/kart dimensions, not eyeballed.
-  const halfW = 1.15, halfH = 1.46;     // primary separation axis (% of board width / height)
-  const jitterW = 0.98, jitterH = 1.24; // secondary axis, used only for 3-4 karts sharing a cell
+  // are scaled to match the new board's much larger cells (~2.45x the old board's cell size)
+  // so two karts overlap only slightly (~12%), same proportion as before, not floating apart
+  // with a gap nor crowding past the cell's own bounds.
+  const halfW = 2.82, halfH = 3.58;     // primary separation axis (% of board width / height)
+  const jitterW = 2.40, jitterH = 3.04; // secondary axis, used only for 3-4 karts sharing a cell
 
   const OFFSETS_V = {
     1: [[0, 0]],
@@ -212,15 +212,12 @@ function renderTokens() {
     4: [[-jitterW, -halfH], [jitterW, -halfH], [-jitterW, halfH], [jitterW, halfH]]
   };
   // The starting grid (casa 0) keeps the 4 cars in a tight 2x2 cluster, like a real
-  // starting grid, instead of spread across the whole gate area. Tuned from an in-app
-  // screenshot: front pair (closer to the checkered line) needed to sit further forward,
-  // back pair further back (to reveal the line), and the top row needed to drop slightly
-  // to share the bottom row's line alignment.
+  // starting grid — same scaled-up proportions as the on-track offsets above.
   const START_GRID_OFFSETS = {
     1: [[0, 0]],
-    2: [[-1.6, 0], [1.6, 0]],
-    3: [[-1.6, -1.3], [1.6, -1.3], [0, 1.9]],
-    4: [[-1.6, -1.5], [1.6, -1.5], [-1.6, 1.9], [1.6, 1.9]]
+    2: [[-3.92, 0], [3.92, 0]],
+    3: [[-3.92, -3.19], [3.92, -3.19], [0, 4.66]],
+    4: [[-3.92, -3.68], [3.92, -3.68], [-3.92, 4.66], [3.92, 4.66]]
   };
 
   const seen = new Set();
