@@ -12,6 +12,7 @@ let selectedDiscards = new Set();
 let humanDrawResolver = null;
 let humanBetResolver = null;
 let humanZeroResolver = null;
+let tokenElements = new Map(); // player -> its persistent <img> kart token element
 
 // ---------------- Coins (persisted for the human player only) ----------------
 const COINS_KEY = 'pokerrace_coins_v2';
@@ -105,6 +106,7 @@ function createPlayers(numBots, humanColor) {
 // ---------------- Rendering: board ----------------
 function initBoard() {
   return new Promise(resolve => {
+    tokenElements = new Map();
     $('#boardContainer').innerHTML = `
       <img id="boardImage" src="board_bg.jpg" alt="Tabuleiro Poker Race" draggable="false">
       <div id="tokenLayer"></div>
@@ -154,7 +156,6 @@ function updateCommunitySlots(cards) {
 function renderTokens() {
   const layer = document.getElementById('tokenLayer');
   if (!layer) return;
-  layer.innerHTML = '';
 
   const groups = {};
   state.players.forEach(p => {
@@ -193,6 +194,7 @@ function renderTokens() {
     4: [[-1.6, -1.5], [1.6, -1.5], [-1.6, 1.9], [1.6, 1.9]]
   };
 
+  const seen = new Set();
   Object.keys(groups).forEach(cellNum => {
     const n = parseInt(cellNum, 10);
     const group = groups[cellNum];
@@ -207,15 +209,28 @@ function renderTokens() {
     }
     group.forEach((p, i) => {
       const [dx, dy] = offs[i];
-      const img = document.createElement('img');
-      img.src = `kart_${p.color}_token.png`;
+      // Reuse the same <img> element across renders instead of tearing it down and
+      // recreating it every frame — that destroy/recreate cycle, happening up to 4x
+      // simultaneously during movement animation, was what made karts visually skip cells.
+      let img = tokenElements.get(p);
+      if (!img) {
+        img = document.createElement('img');
+        img.src = `kart_${p.color}_token.png`;
+        img.title = p.name;
+        tokenElements.set(p, img);
+      }
       img.className = 'kart-token' + (p.isHuman ? ' is-human' : '');
       img.style.left = (center.x + dx) + '%';
       img.style.top = (center.y + dy) + '%';
       img.style.transform = `translate(-50%,-50%) rotate(${heading}deg)`;
-      img.title = p.name;
-      layer.appendChild(img);
+      if (img.parentNode !== layer) layer.appendChild(img);
+      seen.add(p);
     });
+  });
+  // Clean up tokens for players no longer on the board (shouldn't normally happen, but
+  // keeps tokenElements from leaking stale entries across restarts).
+  tokenElements.forEach((img, p) => {
+    if (!seen.has(p)) { img.remove(); tokenElements.delete(p); }
   });
 }
 
@@ -267,39 +282,89 @@ function analyzeDiscardOptions(hand) {
   const handIds = new Set(hand.map(c => c.id));
   const pool = freshDeck().filter(c => !handIds.has(c.id)); // 47 unseen cards
   const TRIALS = 2500;
+  const currentDistance = evaluateHand(hand).moveDistance;
   const options = [];
   for (let mask = 0; mask < 32; mask++) {
     const discardIdx = [], keepIdx = [];
     for (let i = 0; i < 5; i++) { if (mask & (1 << i)) discardIdx.push(i); else keepIdx.push(i); }
     const keepCards = keepIdx.map(i => hand[i]);
-    let expected;
+    let expected, pBig, pWorse;
     if (discardIdx.length === 0) {
-      expected = evaluateHand(hand).moveDistance;
+      expected = currentDistance;
+      pBig = currentDistance >= 5 ? 1 : 0; // Straight (5 casas) or better
+      pWorse = 0; // standing pat can't make your own hand worse
     } else {
-      let total = 0;
+      let total = 0, bigCount = 0, worseCount = 0;
       for (let t = 0; t < TRIALS; t++) {
         const sample = sampleDistinct(pool, discardIdx.length);
-        total += evaluateHand(keepCards.concat(sample)).moveDistance;
+        const d = evaluateHand(keepCards.concat(sample)).moveDistance;
+        total += d;
+        if (d >= 5) bigCount++;
+        if (d < currentDistance) worseCount++;
       }
       expected = total / TRIALS;
+      pBig = bigCount / TRIALS;
+      pWorse = worseCount / TRIALS;
     }
-    options.push({ discardIdx, expected });
+    options.push({ discardIdx, expected, pBig, pWorse });
   }
-  options.sort((a, b) => b.expected - a.expected || a.discardIdx.length - b.discardIdx.length);
-  return options[0];
+  return options;
+}
+
+// How far ahead/behind the human is relative to the rest of the field, to decide whether the
+// hint should play it safe, play pure EV, or gamble for upside. Thresholds are simulation-free
+// judgment calls (not derived from hand math) — easy to retune if they feel off in practice.
+function raceUrgency(human, allPlayers) {
+  const others = allPlayers.filter(p => p !== human);
+  const rank = 1 + others.filter(p => p.position > human.position).length;
+  const leaderPos = Math.max(human.position, ...others.map(p => p.position));
+  const bestOpponentPos = others.length ? Math.max(...others.map(p => p.position)) : 0;
+  const isLast = rank === allPlayers.length;
+  const isLeading = rank === 1;
+  const gapToLeader = leaderPos - human.position;
+  const leadMargin = human.position - bestOpponentPos;
+
+  if (isLeading && human.position >= 70 && leadMargin >= 8) return 'conservative';
+  if (isLast && gapToLeader >= 10) return 'aggressive';
+  return 'normal';
+}
+
+function pickBestOption(options, urgency) {
+  const scored = options.map(o => {
+    let score = o.expected;
+    if (urgency === 'aggressive') score = o.expected + o.pBig * 3;       // reward upside potential
+    if (urgency === 'conservative') score = o.expected - o.pWorse * 4;   // punish downside risk
+    return { ...o, score };
+  });
+  scored.sort((a, b) => b.score - a.score || a.discardIdx.length - b.discardIdx.length);
+  return scored[0];
 }
 
 function showHint() {
   const human = state.players[0];
   const current = evaluateHand(human.hand).moveDistance;
-  const best = analyzeDiscardOptions(human.hand);
+  const urgency = raceUrgency(human, state.players);
+  const options = analyzeDiscardOptions(human.hand);
+  const best = pickBestOption(options, urgency);
   selectedDiscards = new Set(best.discardIdx);
   renderHand();
   updateSwapButton();
+
+  const profileNote = {
+    aggressive: ' Você está bem atrás — vale arriscar por uma mão maior.',
+    conservative: ' Você está na liderança perto da chegada — jogando seguro.',
+    normal: ''
+  }[urgency];
+
   if (best.discardIdx.length === 0) {
-    log(`Dica: manter a mão é a melhor opção (ganho esperado: ${current} casa(s)).`);
+    log(`Dica: manter a mão é a melhor opção (ganho esperado: ${current} casa(s)).${profileNote}`);
   } else {
-    log(`Dica: troque ${best.discardIdx.length} carta(s) (ganho médio esperado: ${best.expected.toFixed(1)} casa(s), contra ${current} mantendo tudo).`);
+    const extra = urgency === 'aggressive'
+      ? ` — ${(best.pBig * 100).toFixed(0)}% de chance de sair com Straight ou melhor`
+      : urgency === 'conservative'
+        ? ` — só ${(best.pWorse * 100).toFixed(0)}% de risco de piorar`
+        : '';
+    log(`Dica: troque ${best.discardIdx.length} carta(s) (ganho médio esperado: ${best.expected.toFixed(1)} casa(s), contra ${current} mantendo tudo${extra}).${profileNote}`);
   }
 }
 
