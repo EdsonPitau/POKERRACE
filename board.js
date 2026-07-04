@@ -68,9 +68,8 @@ function cellCenterPercent(position) {
   if (position <= 0) {
     // "casa 0" — decorative starting spot, just outside cell 1, clear of the checkered line
     const c1 = LOOP_CELLS[1];
-    // casa 0 sits just past the checkered start line, using the same double-width slot the
-    // artwork reserves for cell 25 (66.4%-88.3%) rather than a single-cell-width allowance.
-    return { x: 76, y: c1.y };
+    // casa 0 sits well clear of the checkered start line and the gate bracket markings.
+    return { x: 79.5, y: c1.y };
   }
   const c = LOOP_CELLS[cellInLap(position)];
   if (!c) return { x: 50, y: 50 };

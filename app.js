@@ -109,8 +109,7 @@ function initBoard() {
     tokenElements = new Map();
     $('#boardContainer').innerHTML = `
       <img id="boardImage" src="board_start.jpg" alt="Tabuleiro Poker Race" draggable="false">
-      <div id="tokenLayer"></div>
-      <div id="raceInfoPanel" class="hidden"></div>`;
+      <div id="tokenLayer"></div>`;
     const img = document.getElementById('boardImage');
     if (img.complete && img.naturalWidth > 0) {
       resolve();
@@ -121,30 +120,11 @@ function initBoard() {
   });
 }
 
-// Swaps from the start-line splash art to the live race background, revealing the dynamic
-// info panel — called once when the very first round actually begins (green light moment).
+// Swaps from the start-line splash art to the live race background — called once when the
+// very first round actually begins (green light moment).
 function switchToRaceBoard() {
   const img = document.getElementById('boardImage');
-  const panel = document.getElementById('raceInfoPanel');
   if (img) img.src = 'board_bg.jpg';
-  if (panel) panel.classList.remove('hidden');
-}
-
-// Small always-on panel drawn over the top-left corner of the board (matching the spot left
-// blank in the artwork for this), showing each player's color, name, and current lap — the
-// exact cell is already visible on the track itself, so the panel only needs the lap count.
-function renderRaceInfoPanel() {
-  const panel = document.getElementById('raceInfoPanel');
-  if (!panel || !state) return;
-  panel.innerHTML = state.players.map(p => {
-    const lap = p.position <= 0 ? 1 : lapOf(Math.min(p.position, 100));
-    const posText = `Volta ${lap}/4`;
-    return `<div class="race-info-row">
-      <span class="race-info-swatch" style="background:var(--${p.color})"></span>
-      <span class="race-info-name">${p.name}</span>
-      <span class="race-info-pos">${posText}</span>
-    </div>`;
-  }).join('');
 }
 
 function initCommunitySlots() {
@@ -295,7 +275,6 @@ function renderPlayers() {
       </div>`;
     strip.appendChild(card);
   });
-  renderRaceInfoPanel();
 }
 
 // ---------------- Hint: probability-based discard suggestion (5-card draw) ----------------
