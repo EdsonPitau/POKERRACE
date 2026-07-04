@@ -192,14 +192,12 @@ function renderTokens() {
     3: [[-jitterW, -halfH], [-jitterW, halfH], [jitterW, 0]],
     4: [[-jitterW, -halfH], [jitterW, -halfH], [-jitterW, halfH], [jitterW, halfH]]
   };
-  // The starting grid (casa 0) keeps the 4 cars in a tight 2x2 cluster, like a real
-  // starting grid — same per-axis-corrected scaling as the on-track offsets above.
-  const START_GRID_OFFSETS = {
-    1: [[0, 0]],
-    2: [[-5.46, 0], [5.46, 0]],
-    3: [[-5.46, -3.68], [5.46, -3.68], [0, 4.3]],
-    4: [[-5.46, -4.25], [5.46, -4.25], [-5.46, 4.3], [5.46, 4.3]]
-  };
+  // The starting grid (casa 0) keeps the 4 cars in a tight 2x2 cluster, like a real starting
+  // grid. The "rear" column (closer to cell 25) sits slightly less far out than the "front"
+  // column, so its cars clear the cell-25 boundary line instead of touching it.
+  const START_GRID_SLOTS = [
+    [-5.46, -4.25], [4.7, -4.25], [-5.46, 4.3], [4.7, 4.3]
+  ];
 
   const seen = new Set();
   Object.keys(groups).forEach(cellNum => {
@@ -208,14 +206,16 @@ function renderTokens() {
     const center = cellCenterPercent(n);
     const heading = cellHeadingDeg(n);
     let offs;
-    if (n === 0) {
-      offs = START_GRID_OFFSETS[group.length] || START_GRID_OFFSETS[4];
-    } else {
+    if (n !== 0) {
       const table = cellOrientationForOffsets(n) === 'h' ? OFFSETS_H : OFFSETS_V;
       offs = table[group.length] || table[4];
     }
     group.forEach((p, i) => {
-      const [dx, dy] = offs[i];
+      // At casa 0, each player keeps a FIXED quadrant slot (based on their fixed spot in
+      // state.players) instead of being renumbered into a different N-kart pattern whenever
+      // someone else moves away — otherwise the remaining cars visibly reshuffle into a
+      // completely different formation instead of just leaving a gap behind.
+      const [dx, dy] = n === 0 ? START_GRID_SLOTS[state.players.indexOf(p) % 4] : offs[i];
       // Reuse the same <img> element across renders instead of tearing it down and
       // recreating it every frame — that destroy/recreate cycle, happening up to 4x
       // simultaneously during movement animation, was what made karts visually skip cells.
