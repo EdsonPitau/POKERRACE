@@ -160,50 +160,23 @@ button{font-family:inherit;cursor:pointer;}
   .hand-panel,.players-strip,.log-panel{max-width:1280px;}
 }
 
-/* ---------- Start screen: casino-gold redesign ---------- */
+/* ---------- Start screen: real-art header/footer + HTML panel in between ---------- */
 #screen-start{
-  position:relative;
-  align-items:center;justify-content:flex-start;padding:32px 20px 40px;text-align:center;gap:10px;
-  background:
-    radial-gradient(circle at 50% -10%, #1e2018 0%, #0a0b08 55%, #060604 100%);
-  overflow:hidden;
+  padding:0 0 24px;gap:0;text-align:center;background:#060604;align-items:stretch;
 }
-.suit-mark{position:absolute;font-size:2.6rem;color:#caa64a;opacity:.09;pointer-events:none;line-height:1;}
-.suit-tl{top:18px;left:14px;transform:rotate(-8deg);}
-.suit-tr{top:18px;right:14px;transform:rotate(8deg);}
-.suit-bl{bottom:18px;left:10px;transform:rotate(6deg);}
-.suit-br{bottom:18px;right:10px;transform:rotate(-6deg);}
+.start-header-wrap,.start-footer-wrap{position:relative;width:100%;max-width:480px;margin:0 auto;line-height:0;}
+.start-art{width:100%;display:block;}
 
-.logo-frame{
-  position:relative;padding:14px;border-radius:16px;margin-top:10px;
-  background:linear-gradient(160deg,#e8c565,#a9782a 45%,#7a5518 55%,#e8c565);
-  box-shadow:0 10px 24px rgba(0,0,0,.6), inset 0 0 0 2px rgba(255,255,255,.25);
-}
-#screen-start .logo{width:150px;display:block;border-radius:6px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));}
-.logo-stand{
-  width:120px;height:14px;margin:-4px auto 0;
-  background:linear-gradient(180deg,#c99a3d,#7a5518);
-  clip-path:polygon(15% 0,85% 0,100% 100%,0 100%);
-  box-shadow:0 4px 10px rgba(0,0,0,.5);
-}
-#screen-start h1{
-  font-size:2.5rem;margin-top:14px;letter-spacing:2px;
-  background:linear-gradient(180deg,#fbe7a1,#d9a520 55%,#a9772a);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  -webkit-text-stroke:1.5px #3a2705;
-  filter:drop-shadow(0 3px 0 #3a2705) drop-shadow(0 6px 10px rgba(0,0,0,.5));
-}
-#screen-start .tagline{color:#cdbb87;max-width:340px;margin:0 auto 10px;font-size:.92rem;line-height:1.45;}
-
-#screen-start .coins-badge{
-  background:linear-gradient(180deg,#22200f,#141308);
-  border:1.5px solid var(--yellow-deep);color:var(--yellow);
-  box-shadow:inset 0 0 10px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.4);
-  padding:8px 18px;font-size:.9rem;
+/* Coin badge sits over the empty oval reserved for it in the header art (measured, not eyeballed) */
+.start-coins{
+  position:absolute;left:38.79%;top:83.03%;width:22.01%;height:14.86%;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  background:transparent;border:none;box-shadow:none;border-radius:0;padding:0;margin:0;
+  color:var(--yellow);font-size:.82rem;white-space:nowrap;
 }
 
 .setup-block{
-  position:relative;width:100%;max-width:420px;margin-top:14px;padding:22px 18px;
+  position:relative;width:100%;max-width:420px;margin:14px auto;padding:20px 18px;
   background:linear-gradient(180deg,#181a13,#0e0f0a);
   border:2px solid #7a5518;border-radius:18px;
   box-shadow:0 0 0 1px rgba(232,197,101,.25), 0 12px 30px rgba(0,0,0,.55);
@@ -242,14 +215,11 @@ button{font-family:inherit;cursor:pointer;}
 .name-input,.bot-name-row input{background:#12130e;border:1.5px solid #6b5522;color:var(--text);}
 .name-input:focus,.bot-name-row input:focus{border-color:#f6dd8c;}
 
-#screen-start .btn-primary{
-  background:linear-gradient(180deg,#f9e7a8,#d9a520 50%,#a9772a);
-  color:#241800;box-shadow:0 5px 0 #6b4b12, 0 8px 18px rgba(0,0,0,.5);
-  font-size:1.05rem;
-}
-#screen-start .btn-secondary{
-  background:linear-gradient(180deg,#3a3d38,#212320);border:1.5px solid #55584f;color:#dcd9cc;
-}
+/* Invisible overlay buttons sitting exactly on top of the already-drawn "Começar Corrida" and
+   "Como jogar" buttons in the footer art — measured directly from the image, not eyeballed. */
+.start-overlay-btn{position:absolute;background:transparent;border:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.start-cta-overlay{left:12.04%;width:74.69%;top:2.02%;height:56.45%;}
+.start-rules-overlay{left:39.09%;width:21.1%;top:64.52%;height:28.63%;}
 </style>
 </head>
 <body>
@@ -257,17 +227,10 @@ button{font-family:inherit;cursor:pointer;}
 <div id="app">
 
   <section id="screen-start" class="screen active">
-    <span class="suit-mark suit-tl">♠</span>
-    <span class="suit-mark suit-tr">♥</span>
-    <span class="suit-mark suit-bl">♥</span>
-    <span class="suit-mark suit-br">♣</span>
-    <div class="logo-frame">
-      <img class="logo" src="logo.png" alt="Poker Race">
+    <div class="start-header-wrap">
+      <img class="start-art" src="start_header.jpg" alt="Poker Race — o jogo de tabuleiro onde a estratégia do poker encontra a emoção da corrida.">
+      <div class="coins-badge start-coins"><span class="coin-icon">🪙</span> <span class="coins-value">0</span> moedas</div>
     </div>
-    <div class="logo-stand"></div>
-    <h1>Poker Race</h1>
-    <p class="tagline">O jogo de tabuleiro onde a estratégia do poker encontra a emoção da corrida. Forme a melhor mão e dispare na pista!</p>
-    <div class="coins-badge"><span class="coin-icon">🪙</span> <span class="coins-value">0</span> moedas</div>
     <div class="setup-block">
       <label>Modo de jogo</label>
       <div class="choice-row" id="modeChoices"></div>
@@ -280,8 +243,11 @@ button{font-family:inherit;cursor:pointer;}
       <label>Nomes dos bots (opcional)</label>
       <div class="bot-names-block" id="botNameInputs"></div>
     </div>
-    <button id="btnStart" class="btn-primary">🏁 Começar Corrida 🏁</button>
-    <button id="btnRules" class="btn-secondary">Como jogar</button>
+    <div class="start-footer-wrap">
+      <img class="start-art" src="start_footer.jpg" alt="">
+      <button id="btnStart" class="start-overlay-btn start-cta-overlay" aria-label="Começar Corrida"></button>
+      <button id="btnRules" class="start-overlay-btn start-rules-overlay" aria-label="Como jogar"></button>
+    </div>
   </section>
 
   <section id="screen-game" class="screen">
