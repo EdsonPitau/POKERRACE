@@ -207,18 +207,28 @@ button{font-family:inherit;cursor:pointer;}
 .choice-btn.locked{opacity:.5;}
 
 .kart-choice{
-  --kart-glow: var(--yellow);
-  flex:0 1 auto;min-width:0;
-  background:#12130e;border:none;border-radius:0;
-  clip-path:polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
-  padding:8px 3px 6px;position:relative;
-  filter:drop-shadow(0 0 2px var(--kart-glow)) drop-shadow(0 0 5px var(--kart-glow));
+  flex:0 1 auto;min-width:0;background:transparent;border:none;
+  padding:4px 3px 2px;position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
   opacity:.7;
 }
-.kart-choice img{width:36px;}
-.kart-choice.active{opacity:1;filter:drop-shadow(0 0 3px var(--kart-glow)) drop-shadow(0 0 8px var(--kart-glow)) drop-shadow(0 0 2px #f6dd8c);}
-.kart-choice span{color:#cfc39c;font-size:.6rem;white-space:nowrap;}
-.kart-choice.active span{color:#f6dd8c;}
+.kart-choice .kart-hex{
+  --kart-glow: var(--yellow);
+  display:flex;align-items:center;justify-content:center;
+  background:#12130e;
+  clip-path:polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
+  padding:8px 6px;
+  filter:drop-shadow(0 0 2px var(--kart-glow)) drop-shadow(0 0 5px var(--kart-glow));
+}
+.kart-choice img{width:36px;display:block;}
+.kart-choice.active{opacity:1;}
+.kart-choice.active .kart-hex{filter:drop-shadow(0 0 3px var(--kart-glow)) drop-shadow(0 0 8px var(--kart-glow)) drop-shadow(0 0 2px #f6dd8c);}
+.kart-choice .kart-label{color:#cfc39c;font-size:.62rem;white-space:nowrap;}
+.kart-choice.active .kart-label{color:#f6dd8c;}
+
+.inline-name-row{display:flex;align-items:center;gap:10px;margin:10px 0 6px;}
+.inline-label{color:#c9ad63;font-size:.72rem;margin:0;white-space:nowrap;flex-shrink:0;}
+.inline-name-input{flex:0 1 160px;width:auto;margin:0;padding:7px 10px;}
 
 .name-input,.bot-name-row input{background:#12130e;border:1.5px solid #6b5522;color:var(--text);}
 .name-input:focus,.bot-name-row input:focus{border-color:#f6dd8c;}
@@ -245,8 +255,10 @@ button{font-family:inherit;cursor:pointer;}
         <div class="choice-row" id="botCountChoices"></div>
         <label>Escolha seu kart</label>
         <div class="choice-row" id="kartColorChoices"></div>
-        <label>Seu nome</label>
-        <input type="text" id="playerNameInput" class="name-input" placeholder="Você" maxlength="16">
+        <div class="inline-name-row">
+          <label class="inline-label">Seu nome</label>
+          <input type="text" id="playerNameInput" class="name-input inline-name-input" placeholder="Você" maxlength="16">
+        </div>
         <label>Nomes dos bots (opcional)</label>
         <div class="bot-names-block" id="botNameInputs"></div>
       </div></div>

@@ -75,7 +75,7 @@ function initSetupScreen() {
     const b = document.createElement('button');
     b.className = 'kart-choice' + (c === setupColor ? ' active' : '');
     b.style.setProperty('--kart-glow', `var(--${c})`);
-    b.innerHTML = `<img src="kart_${c}_token.png" alt="${KART_LABEL[c]}"><span>${KART_LABEL[c]}</span>`;
+    b.innerHTML = `<span class="kart-hex"><img src="kart_${c}_token.png" alt="${KART_LABEL[c]}"></span><span class="kart-label">${KART_LABEL[c]}</span>`;
     b.onclick = () => { setupColor = c; initSetupScreen(); };
     colorRow.appendChild(b);
   });
