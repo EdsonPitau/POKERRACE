@@ -28,6 +28,17 @@ function addPlayerCoins(delta) {
   saveCoins(playerCoins);
   updateCoinsDisplay();
 }
+
+// ---------------- Names (persisted so they're remembered next time you play) ----------------
+const NAMES_KEY = 'pokerrace_names_v1';
+function loadNames() {
+  try {
+    const v = JSON.parse(localStorage.getItem(NAMES_KEY) || '{}');
+    return (v && typeof v === 'object') ? v : {};
+  } catch (e) { return {}; }
+}
+function saveNames(names) { localStorage.setItem(NAMES_KEY, JSON.stringify(names)); }
+let savedNames = loadNames(); // { player: 'Edson', yellow: 'Fulano', blue: '...', ... }
 function updateCoinsDisplay() {
   $$('.coins-value').forEach(el => el.textContent = playerCoins);
   const holdemBtn = document.getElementById('modeHoldemBtn');
@@ -82,20 +93,48 @@ function initSetupScreen() {
     modeRow.appendChild(b);
   });
 
+  // ---- Names: yours, plus one per currently-selected bot slot ----
+  const nameInput = $('#playerNameInput');
+  if (nameInput && document.activeElement !== nameInput) nameInput.value = savedNames.player || '';
+  if (nameInput) {
+    nameInput.oninput = () => {
+      savedNames.player = nameInput.value.trim();
+      saveNames(savedNames);
+    };
+  }
+
+  const botColors = KART_COLORS.filter(c => c !== setupColor).slice(0, setupBots);
+  const botNamesBox = $('#botNameInputs');
+  botNamesBox.innerHTML = '';
+  botColors.forEach(c => {
+    const wrap = document.createElement('div');
+    wrap.className = 'bot-name-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 16;
+    input.placeholder = `Bot ${KART_LABEL[c]}`;
+    input.value = savedNames[c] || '';
+    input.oninput = () => { savedNames[c] = input.value.trim(); saveNames(savedNames); };
+    wrap.innerHTML = `<img src="kart_${c}_token.png" alt="${KART_LABEL[c]}">`;
+    wrap.appendChild(input);
+    botNamesBox.appendChild(wrap);
+  });
+
   updateCoinsDisplay();
 }
 
 function createPlayers(numBots, humanColor) {
   const others = KART_COLORS.filter(c => c !== humanColor);
   const players = [{
-    id: 0, name: 'Você', color: humanColor, isHuman: true,
+    id: 0, name: (savedNames.player && savedNames.player.trim()) || 'Você', color: humanColor, isHuman: true,
     position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
     betCoins: 2000, bettingActive: false, zeroCount: 0, raceWinnings: 0
   }];
   for (let i = 0; i < numBots; i++) {
     const color = others[i];
+    const customName = savedNames[color] && savedNames[color].trim();
     players.push({
-      id: i + 1, name: `Bot ${KART_LABEL[color]}`, color, isHuman: false,
+      id: i + 1, name: customName || `Bot ${KART_LABEL[color]}`, color, isHuman: false,
       position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
       betCoins: 2000, bettingActive: false, zeroCount: 0, raceWinnings: 0
     });
@@ -258,7 +297,11 @@ function renderPlayers() {
     const avatarHtml = `<img class="chip-kart" src="kart_${p.color}_token.png">`;
     let statusHtml = '';
     if (p.revealed && p.evalResult) {
-      statusHtml = `<div class="chip-hand">${p.evalResult.name}</div>`;
+      const revealedCards = state.mode === 'holdem' ? p.holeCards : p.hand;
+      const miniCardsHtml = (revealedCards || []).map(c => `
+        <span class="mini-card" style="color:${SUIT_COLOR[c.suit]}">${rankLabel(c.rank)}${SUIT_SYMBOL[c.suit]}</span>
+      `).join('');
+      statusHtml = `<div class="chip-hand">${p.evalResult.name}</div><div class="chip-cards">${miniCardsHtml}</div>`;
     } else if (state.mode === 'draw' && p.discardedCount === null) {
       statusHtml = `<div class="chip-hand muted">pensando…</div>`;
     } else {
@@ -464,7 +507,8 @@ function log(msg) {
 }
 
 function updatePhase(text) {
-  $('#phaseLabel').textContent = text;
+  // Header phase text was removed (redundant with the log panel below) — kept as a no-op so
+  // the many existing call sites throughout the round logic don't need to change.
 }
 
 // ---------------- Human draw phase (5-card draw only) ----------------
@@ -552,15 +596,15 @@ function botWantsToBet(bot, evalSoFar) {
 // zero-coins flow if needed. Returns true if the player ends up able to (and does) bet.
 async function ensureCoinsAndBet(p, amount, isHuman) {
   if (amount <= 0) return true;
-  if (isHuman ? playerCoins >= amount : p.betCoins >= amount) return true;
+  if (p.betCoins >= amount) return true;
   // not enough coins
   p.zeroCount++;
   if (!isHuman) return false; // bots simply skip betting when short
   const choice = await humanZeroCoinsPrompt();
   if (choice === 'ad' && p.zeroCount <= 3) {
-    addPlayerCoins(10);
-    log('Você assistiu a um anúncio e ganhou 10 moedas.');
-    return playerCoins >= amount;
+    p.betCoins += 10;
+    log('Você assistiu a um anúncio e ganhou 10 moedas (só para esta corrida).');
+    return p.betCoins >= amount;
   }
   if (choice === 'quit') {
     state.humanQuit = true;
@@ -764,14 +808,14 @@ async function playRoundHoldem() {
   // ---- Pré-Flop: 5 coins to participate in betting this round ----
   updatePhase('Pré-Flop — aposte 5 moedas para participar das apostas');
   const human = state.players[0];
-  const canAffordPreflop = playerCoins >= 5;
+  const canAffordPreflop = human.betCoins >= 5;
   if (canAffordPreflop) {
     const wantsToBet = await humanBetPrompt('Apostar 5 moedas no pré-flop?', [
       { label: 'Apostar 5 moedas', value: true },
       { label: 'Não apostar', value: false }
     ]);
     if (wantsToBet) {
-      addPlayerCoins(-5);
+      human.betCoins -= 5;
       state.pot += 5;
       human.bettingActive = true;
       log('Você apostou 5 moedas no pré-flop.');
@@ -809,17 +853,17 @@ async function playRoundHoldem() {
 
     if (human.bettingActive) {
       const soFar = evaluateBestN(human.holeCards.concat(state.community.slice(0, revealedCount)));
-      const canAfford = playerCoins >= 25;
+      const canAfford = human.betCoins >= 5;
       if (canAfford) {
-        const bet = await humanBetPrompt(`${street.name} — apostar até 25 moedas?`, [
-          { label: 'Apostar 25 moedas', value: 25 },
-          { label: 'Passar (0)', value: 0 }
-        ]);
-        if (bet > 0) { addPlayerCoins(-bet); state.pot += bet; log(`Você apostou ${bet} moedas no ${street.name}.`); }
+        const amounts = [5, 10, 15, 20, 25].filter(a => a <= human.betCoins);
+        const options = amounts.map(a => ({ label: `Apostar ${a} moedas`, value: a }));
+        options.push({ label: 'Passar (0)', value: 0 });
+        const bet = await humanBetPrompt(`${street.name} — quanto apostar (até 25 moedas)?`, options);
+        if (bet > 0) { human.betCoins -= bet; state.pot += bet; log(`Você apostou ${bet} moedas no ${street.name}.`); }
       } else {
-        const ok = await ensureCoinsAndBet(human, 25, true);
+        const ok = await ensureCoinsAndBet(human, 5, true);
         if (state.humanQuit) { await concludeHoldemRace(); return; }
-        if (ok) { addPlayerCoins(-25); state.pot += 25; log(`Você apostou 25 moedas no ${street.name}.`); }
+        if (ok) { human.betCoins -= 5; state.pot += 5; log(`Você apostou 5 moedas no ${street.name}.`); }
       }
     }
     for (let i = 1; i < state.players.length; i++) {
@@ -852,8 +896,8 @@ async function playRoundHoldem() {
     const potWinners = bettors.filter(p => compareHands(p.evalResult, best) === 0);
     const share = Math.floor(state.pot / potWinners.length);
     potWinners.forEach(p => {
-      if (p.isHuman) { addPlayerCoins(share); p.raceWinnings += share; }
-      else { p.betCoins += share; }
+      p.betCoins += share;
+      if (p.isHuman) p.raceWinnings += share;
     });
     log(`${potWinners.map(p => p.name).join(' e ')} venceu(ram) o pote de ${state.pot} moedas!`);
   }
