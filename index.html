@@ -82,6 +82,9 @@ button{font-family:inherit;cursor:pointer;}
 .chip-pos{font-size:.68rem;color:var(--text-dim);}
 .chip-hand{font-size:.66rem;color:var(--yellow);font-weight:700;}
 .chip-hand.muted{color:var(--text-dim);font-style:italic;font-weight:500;}
+.chip-bank{font-size:.78rem;font-weight:700;color:var(--yellow);white-space:nowrap;}
+.chip-delta.up{color:#5ec26a;}
+.chip-delta.down{color:#e05c5c;}
 .chip-cards{display:flex;gap:3px;margin-top:2px;flex-wrap:wrap;}
 .mini-card{display:inline-block;background:#fdfcf6;border:1px solid #222;border-radius:3px;padding:1px 3px;font-size:.62rem;font-weight:800;line-height:1.2;}
 
@@ -160,43 +163,35 @@ button{font-family:inherit;cursor:pointer;}
   .hand-panel,.players-strip,.log-panel{max-width:1280px;}
 }
 
-/* ---------- Start screen: real-art header/footer + HTML panel in between ---------- */
-#screen-start{
-  padding:0 0 24px;gap:0;text-align:center;background:#060604;align-items:stretch;
-}
-.start-header-wrap,.start-footer-wrap{position:relative;width:100%;max-width:480px;margin:0 auto;line-height:0;}
+/* ---------- Start screen: single real-art background + measured overlays ---------- */
+#screen-start{padding:0;gap:0;text-align:center;background:#060604;}
+.start-art-wrap{position:relative;width:100%;max-width:480px;margin:0 auto;line-height:0;}
 .start-art{width:100%;display:block;}
 
-/* Coin badge sits over the empty oval reserved for it in the header art (measured, not eyeballed) */
+/* Coin badge sits over the empty oval reserved for it in the art (measured, not eyeballed) */
 .start-coins{
-  position:absolute;left:38.79%;top:83.03%;width:22.01%;height:14.86%;
+  position:absolute;left:36.5%;top:33.3%;width:26.8%;height:7.1%;
   display:flex;align-items:center;justify-content:center;gap:5px;
   background:transparent;border:none;box-shadow:none;border-radius:0;padding:0;margin:0;
   color:var(--yellow);font-size:.82rem;white-space:nowrap;
 }
 
 .setup-block{
-  position:relative;width:100%;max-width:420px;margin:14px auto;padding:20px 18px;
-  background:linear-gradient(180deg,#181a13,#0e0f0a);
-  border:2px solid #7a5518;border-radius:18px;
-  box-shadow:0 0 0 1px rgba(232,197,101,.25), 0 12px 30px rgba(0,0,0,.55);
+  position:absolute;left:11.42%;top:41.98%;width:76.13%;height:45.45%;
+  overflow-y:auto;box-sizing:border-box;
+  padding:14px 14px 10px;text-align:left;background:transparent;border:none;
 }
-.setup-block::before,.setup-block::after{
-  content:'';position:absolute;top:-2px;width:34px;height:34px;border-top:3px solid #56c8e8;pointer-events:none;
-  filter:drop-shadow(0 0 6px #56c8e8);
-}
-.setup-block::before{left:-2px;border-left:3px solid #56c8e8;border-top-left-radius:16px;}
-.setup-block::after{right:-2px;border-right:3px solid #56c8e8;border-top-right-radius:16px;}
-.setup-block label{color:#c9ad63;font-size:.76rem;}
+.setup-block label{color:#c9ad63;font-size:.72rem;margin:8px 0 6px;}
+.setup-block label:first-child{margin-top:0;}
 
 .choice-btn{
   background:linear-gradient(180deg,#1e2016,#131409);border:1.5px solid #6b5522;color:#d8cba0;
-  border-radius:10px;padding:12px 6px;font-weight:800;
+  border-radius:8px;padding:7px 6px;font-weight:800;font-size:.78rem;
 }
 .choice-btn.active{
   border-color:#f6dd8c;color:#2a1c02;
   background:linear-gradient(180deg,#f9e7a8,#d9a520 55%,#a9772a);
-  box-shadow:0 3px 0 #6b4b12, 0 4px 10px rgba(0,0,0,.4);
+  box-shadow:0 2px 0 #6b4b12, 0 3px 8px rgba(0,0,0,.4);
 }
 .choice-btn.locked{opacity:.5;}
 
@@ -216,10 +211,10 @@ button{font-family:inherit;cursor:pointer;}
 .name-input:focus,.bot-name-row input:focus{border-color:#f6dd8c;}
 
 /* Invisible overlay buttons sitting exactly on top of the already-drawn "Começar Corrida" and
-   "Como jogar" buttons in the footer art — measured directly from the image, not eyeballed. */
+   "Como jogar" buttons in the art — measured directly from the image, not eyeballed. */
 .start-overlay-btn{position:absolute;background:transparent;border:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.start-cta-overlay{left:12.04%;width:74.69%;top:2.02%;height:56.45%;}
-.start-rules-overlay{left:39.09%;width:21.1%;top:64.52%;height:28.63%;}
+.start-cta-overlay{left:10.9%;width:77.2%;top:84.97%;height:9.52%;}
+.start-rules-overlay{left:30.66%;width:29.53%;top:93.96%;height:5.13%;}
 </style>
 </head>
 <body>
@@ -227,24 +222,21 @@ button{font-family:inherit;cursor:pointer;}
 <div id="app">
 
   <section id="screen-start" class="screen active">
-    <div class="start-header-wrap">
-      <img class="start-art" src="start_header.jpg" alt="Poker Race — o jogo de tabuleiro onde a estratégia do poker encontra a emoção da corrida.">
+    <div class="start-art-wrap">
+      <img class="start-art" src="start_bg.jpg" alt="Poker Race — o jogo de tabuleiro onde a estratégia do poker encontra a emoção da corrida.">
       <div class="coins-badge start-coins"><span class="coin-icon">🪙</span> <span class="coins-value">0</span> moedas</div>
-    </div>
-    <div class="setup-block">
-      <label>Modo de jogo</label>
-      <div class="choice-row" id="modeChoices"></div>
-      <label>Quantos oponentes bots?</label>
-      <div class="choice-row" id="botCountChoices"></div>
-      <label>Escolha seu kart</label>
-      <div class="choice-row" id="kartColorChoices"></div>
-      <label>Seu nome</label>
-      <input type="text" id="playerNameInput" class="name-input" placeholder="Você" maxlength="16">
-      <label>Nomes dos bots (opcional)</label>
-      <div class="bot-names-block" id="botNameInputs"></div>
-    </div>
-    <div class="start-footer-wrap">
-      <img class="start-art" src="start_footer.jpg" alt="">
+      <div class="setup-block">
+        <label>Modo de jogo</label>
+        <div class="choice-row" id="modeChoices"></div>
+        <label>Quantos oponentes bots?</label>
+        <div class="choice-row" id="botCountChoices"></div>
+        <label>Escolha seu kart</label>
+        <div class="choice-row" id="kartColorChoices"></div>
+        <label>Seu nome</label>
+        <input type="text" id="playerNameInput" class="name-input" placeholder="Você" maxlength="16">
+        <label>Nomes dos bots (opcional)</label>
+        <div class="bot-names-block" id="botNameInputs"></div>
+      </div>
       <button id="btnStart" class="start-overlay-btn start-cta-overlay" aria-label="Começar Corrida"></button>
       <button id="btnRules" class="start-overlay-btn start-rules-overlay" aria-label="Como jogar"></button>
     </div>

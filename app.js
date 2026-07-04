@@ -13,6 +13,7 @@ let humanDrawResolver = null;
 let humanBetResolver = null;
 let humanZeroResolver = null;
 let tokenElements = new Map(); // player -> its persistent <img> kart token element
+const HOLDEM_STARTING_CHIPS = 2000; // in-race betting bankroll (funny money, not real coins)
 
 // ---------------- Coins (persisted for the human player only) ----------------
 const COINS_KEY = 'pokerrace_coins_v2';
@@ -129,7 +130,7 @@ function createPlayers(numBots, humanColor) {
   const players = [{
     id: 0, name: (savedNames.player && savedNames.player.trim()) || 'Você', color: humanColor, isHuman: true,
     position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
-    betCoins: 2000, bettingActive: false, zeroCount: 0, raceWinnings: 0
+    betCoins: HOLDEM_STARTING_CHIPS, bettingActive: false, zeroCount: 0, raceWinnings: 0
   }];
   for (let i = 0; i < numBots; i++) {
     const color = others[i];
@@ -137,7 +138,7 @@ function createPlayers(numBots, humanColor) {
     players.push({
       id: i + 1, name: customName || `Bot ${KART_LABEL[color]}`, color, isHuman: false,
       position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
-      betCoins: 2000, bettingActive: false, zeroCount: 0, raceWinnings: 0
+      betCoins: HOLDEM_STARTING_CHIPS, bettingActive: false, zeroCount: 0, raceWinnings: 0
     });
   }
   return players;
@@ -310,11 +311,19 @@ function renderPlayers() {
     }
     const clamped = Math.min(p.position, 100);
     const posLabel = clamped <= 0 ? 'Casa 0' : `Casa ${cellInLap(clamped)} · V${lapOf(clamped)}/4`;
+    let bankHtml = '';
+    if (state.mode === 'holdem') {
+      const delta = p.betCoins - HOLDEM_STARTING_CHIPS;
+      const sign = delta > 0 ? '+' : '';
+      const deltaCls = delta > 0 ? 'up' : delta < 0 ? 'down' : '';
+      bankHtml = `<div class="chip-bank">🪙 ${p.betCoins} <span class="chip-delta ${deltaCls}">${delta !== 0 ? `(${sign}${delta})` : ''}</span></div>`;
+    }
     card.innerHTML = `
       ${avatarHtml}
       <div class="chip-info">
         <div class="chip-name">${p.name}</div>
         <div class="chip-pos">${posLabel}</div>
+        ${bankHtml}
         ${statusHtml}
       </div>`;
     strip.appendChild(card);
