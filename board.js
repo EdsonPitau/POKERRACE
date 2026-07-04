@@ -29,8 +29,13 @@ const RIGHT_ORDER = [23, 22, 21, 20];                // top -> bottom
 
 function buildLoopCells() {
   const cells = {};
-  const wTop = (ROW_RIGHT_PCT - ROW_LEFT_PCT) / TOP_ORDER.length;
-  TOP_ORDER.forEach((n, k) => { cells[n] = { x: ROW_LEFT_PCT + wTop * (k + 0.5), y: TOP_Y_PCT }; });
+  // The top row is 9 units wide, not 8 — cell 25 visually spans 2 units (verified by
+  // pixel-scanning the lane-center dash marks), the other 6 top-row cells + cell 24 take 1
+  // unit each. Cells 6,5,4,3,2,1 sit at units 0-5, cell 25 spans units 6-8 (centered at 7),
+  // and cell 24 sits at unit 8.5.
+  const topUnit = (ROW_RIGHT_PCT - ROW_LEFT_PCT) / 9;
+  const topUnitPositions = { 6: 0.5, 5: 1.5, 4: 2.5, 3: 3.5, 2: 4.5, 1: 5.5, 25: 7, 24: 8.5 };
+  TOP_ORDER.forEach(n => { cells[n] = { x: ROW_LEFT_PCT + topUnit * topUnitPositions[n], y: TOP_Y_PCT }; });
 
   const wBot = (ROW_RIGHT_PCT - ROW_LEFT_PCT) / BOTTOM_ORDER.length;
   BOTTOM_ORDER.forEach((n, k) => { cells[n] = { x: ROW_LEFT_PCT + wBot * (k + 0.5), y: BOTTOM_Y_PCT }; });
@@ -63,7 +68,9 @@ function cellCenterPercent(position) {
   if (position <= 0) {
     // "casa 0" — decorative starting spot, just outside cell 1, clear of the checkered line
     const c1 = LOOP_CELLS[1];
-    return { x: c1.x + 4.6, y: c1.y };
+    // casa 0 sits just past the checkered start line (measured at ~66.4%-69% of board width),
+    // clear of both the line and cell 25's territory.
+    return { x: 72.5, y: c1.y };
   }
   const c = LOOP_CELLS[cellInLap(position)];
   if (!c) return { x: 50, y: 50 };
