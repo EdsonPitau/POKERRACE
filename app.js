@@ -131,15 +131,14 @@ function switchToRaceBoard() {
 }
 
 // Small always-on panel drawn over the top-left corner of the board (matching the spot left
-// blank in the artwork for this), showing each player's color, name, and current position on
-// the loop — "Casa X" plus "Volta Y" since the board now wraps every 25 cells (4 laps = 100).
+// blank in the artwork for this), showing each player's color, name, and current lap — the
+// exact cell is already visible on the track itself, so the panel only needs the lap count.
 function renderRaceInfoPanel() {
   const panel = document.getElementById('raceInfoPanel');
   if (!panel || !state) return;
   panel.innerHTML = state.players.map(p => {
     const lap = p.position <= 0 ? 1 : lapOf(Math.min(p.position, 100));
-    const cell = p.position <= 0 ? 0 : cellInLap(Math.min(p.position, 100));
-    const posText = p.position <= 0 ? 'Casa 0' : `Casa ${cell} · Volta ${lap}/4`;
+    const posText = `Volta ${lap}/4`;
     return `<div class="race-info-row">
       <span class="race-info-swatch" style="background:var(--${p.color})"></span>
       <span class="race-info-name">${p.name}</span>
@@ -217,9 +216,9 @@ function renderTokens() {
   // starting grid — same per-axis-corrected scaling as the on-track offsets above.
   const START_GRID_OFFSETS = {
     1: [[0, 0]],
-    2: [[-3.88, 0], [3.88, 0]],
-    3: [[-3.88, -3.68], [3.88, -3.68], [0, 4.3]],
-    4: [[-3.88, -4.25], [3.88, -4.25], [-3.88, 4.3], [3.88, 4.3]]
+    2: [[-5.46, 0], [5.46, 0]],
+    3: [[-5.46, -3.68], [5.46, -3.68], [0, 4.3]],
+    4: [[-5.46, -4.25], [5.46, -4.25], [-5.46, 4.3], [5.46, 4.3]]
   };
 
   const seen = new Set();
