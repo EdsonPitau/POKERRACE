@@ -159,12 +159,12 @@ function check(name, cond) {
 // ---- TEST 7: heading around the new 25-cell loop (4 laps x 25 = 100 casas) — checks the
 // corner transitions land on the correct cell, not one early or late ----
 {
-  check('cell6 still faces LEFT (0) — end of the top row', cellHeadingDeg(6) === 0);
-  check('cell7 faces DOWN (270) — start of the left side', cellHeadingDeg(7) === 270);
+  check('cell5 still faces LEFT (0) — end of the top row before the early turn', cellHeadingDeg(5) === 0);
+  check('cell6 faces DOWN (270) — this corner turns one cell early', cellHeadingDeg(6) === 270);
   check('cell10 still faces DOWN (270) — end of the left side', cellHeadingDeg(10) === 270);
   check('cell11 faces RIGHT (180) — start of the bottom row', cellHeadingDeg(11) === 180);
-  check('cell19 still faces RIGHT (180) — end of the bottom row', cellHeadingDeg(19) === 180);
-  check('cell20 faces UP (90) — start of the right side', cellHeadingDeg(20) === 90);
+  check('cell18 still faces RIGHT (180) — end of the bottom row before the early turn', cellHeadingDeg(18) === 180);
+  check('cell19 faces UP (90) — this corner turns one cell early', cellHeadingDeg(19) === 90);
   check('cell23 still faces UP (90) — end of the right side', cellHeadingDeg(23) === 90);
   check('cell24 faces LEFT (0) — back onto the top row, toward the finish line', cellHeadingDeg(24) === 0);
   check('cell25 (finish) faces LEFT (0)', cellHeadingDeg(25) === 0);

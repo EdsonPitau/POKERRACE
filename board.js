@@ -81,11 +81,16 @@ function cellCenterPercent(position) {
 // Kart artwork faces LEFT by default. 0=left, 90=up, 180=right, 270=down (clockwise CSS rotation).
 // Direction of travel around the loop: leftward across the top, down the left side, rightward
 // across the bottom, up the right side, then leftward across the top again to the finish line.
+// NOTE: the 4 corners aren't drawn symmetrically in the artwork — at 2 of them (10->11, 23->24)
+// the turn art shows up starting on the first cell of the new direction; at the other 2
+// (6->7, 19->20) it shows up one cell EARLY, on the last cell of the old direction. Verified
+// directly in-app: 11 and 24 turn correctly as-is, 6 and 19 needed to move into the next
+// segment instead.
 const HEADING_SEGMENTS = [
-  [1, 6, 0],     // top row, moving left
-  [7, 10, 270],  // left side, moving down
-  [11, 19, 180], // bottom row, moving right
-  [20, 23, 90],  // right side, moving up
+  [1, 5, 0],     // top row, moving left
+  [6, 10, 270],  // left side, moving down (cell 6 already turns here, not at 7)
+  [11, 18, 180], // bottom row, moving right
+  [19, 23, 90],  // right side, moving up (cell 19 already turns here, not at 20)
   [24, 25, 0]    // top row, moving left, back to the finish line
 ];
 

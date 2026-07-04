@@ -248,6 +248,7 @@ function renderTokens() {
         tokenElements.set(p, img);
       }
       img.className = 'kart-token' + (p.isHuman ? ' is-human' : '');
+      if (p.isHuman) img.style.setProperty('--human-glow', `var(--${p.color})`);
       img.style.left = (center.x + dx) + '%';
       img.style.top = (center.y + dy) + '%';
       img.style.transform = `translate(-50%,-50%) rotate(${heading}deg)`;

@@ -88,7 +88,7 @@ button{font-family:inherit;cursor:pointer;}
 #boardImage{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;}
 #tokenLayer{position:absolute;inset:0;pointer-events:none;}
 .kart-token{position:absolute;width:6.3%;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));transition:left .11s linear, top .11s linear, transform .11s linear;}
-.kart-token.is-human{filter:drop-shadow(0 0 5px var(--yellow)) drop-shadow(0 2px 3px rgba(0,0,0,.6));}
+.kart-token.is-human{filter:drop-shadow(0 0 6px var(--human-glow, var(--yellow))) drop-shadow(0 0 12px var(--human-glow, var(--yellow))) drop-shadow(0 2px 3px rgba(0,0,0,.6));}
 
 #raceInfoPanel{position:absolute;left:9.5%;top:16%;width:37%;display:flex;flex-direction:column;gap:2.2%;pointer-events:none;}
 #raceInfoPanel.hidden{display:none;}
