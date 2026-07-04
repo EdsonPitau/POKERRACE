@@ -170,24 +170,30 @@ button{font-family:inherit;cursor:pointer;}
 
 /* Coin badge sits over the empty oval reserved for it in the art (measured, not eyeballed) */
 .start-coins{
-  position:absolute;left:36.5%;top:33.3%;width:26.8%;height:7.1%;
-  display:flex;align-items:center;justify-content:center;gap:5px;
+  position:absolute;left:33%;top:33.3%;width:34%;height:7.1%;
+  display:flex;align-items:center;justify-content:center;gap:4px;
   background:transparent;border:none;box-shadow:none;border-radius:0;padding:0;margin:0;
-  color:var(--yellow);font-size:.82rem;white-space:nowrap;
+  color:var(--yellow);font-size:.7rem;white-space:nowrap;overflow:hidden;
   text-shadow:0 0 3px #000, 0 0 6px #000, 0 1px 2px #000;
 }
+.start-coins .coins-value{font-variant-numeric:tabular-nums;}
 
-.setup-block{
+.setup-block-wrap{
   position:absolute;left:11.42%;top:41.98%;width:76.13%;height:45.45%;
-  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;box-sizing:border-box;
-  padding:12px 12px 8px;text-align:left;background:transparent;border:none;
+  border-radius:22px;overflow:hidden;
+}
+.setup-block{
+  width:100%;height:100%;box-sizing:border-box;
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  padding:12px 12px 16px;text-align:left;background:transparent;border:none;
   scrollbar-width:thin;scrollbar-color:#a9772a #12130e;
 }
 .setup-block::-webkit-scrollbar{width:6px;}
 .setup-block::-webkit-scrollbar-track{background:#12130e;border-radius:3px;}
 .setup-block::-webkit-scrollbar-thumb{background:#a9772a;border-radius:3px;}
-.setup-block label{color:#c9ad63;font-size:.7rem;margin:6px 0 5px;}
+.setup-block label{color:#c9ad63;font-size:.7rem;margin:10px 0 6px;}
 .setup-block label:first-child{margin-top:0;}
+.choice-row{gap:6px;}
 
 .choice-btn{
   background:linear-gradient(180deg,#1e2016,#131409);border:1.5px solid #6b5522;color:#d8cba0;
@@ -202,16 +208,16 @@ button{font-family:inherit;cursor:pointer;}
 
 .kart-choice{
   --kart-glow: var(--yellow);
-  flex:0 1 auto;
+  flex:0 1 auto;min-width:0;
   background:#12130e;border:none;border-radius:0;
   clip-path:polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
-  padding:10px 4px 8px;position:relative;
+  padding:8px 3px 6px;position:relative;
   filter:drop-shadow(0 0 2px var(--kart-glow)) drop-shadow(0 0 5px var(--kart-glow));
   opacity:.7;
 }
-.kart-choice img{width:44px;}
+.kart-choice img{width:36px;}
 .kart-choice.active{opacity:1;filter:drop-shadow(0 0 3px var(--kart-glow)) drop-shadow(0 0 8px var(--kart-glow)) drop-shadow(0 0 2px #f6dd8c);}
-.kart-choice span{color:#cfc39c;font-size:.68rem;}
+.kart-choice span{color:#cfc39c;font-size:.6rem;white-space:nowrap;}
 .kart-choice.active span{color:#f6dd8c;}
 
 .name-input,.bot-name-row input{background:#12130e;border:1.5px solid #6b5522;color:var(--text);}
@@ -231,8 +237,8 @@ button{font-family:inherit;cursor:pointer;}
   <section id="screen-start" class="screen active">
     <div class="start-art-wrap">
       <img class="start-art" src="start_bg.jpg" alt="Poker Race — o jogo de tabuleiro onde a estratégia do poker encontra a emoção da corrida.">
-      <div class="coins-badge start-coins"><span class="coin-icon">🪙</span> <span class="coins-value">0</span> moedas</div>
-      <div class="setup-block">
+      <div class="coins-badge start-coins"><span class="coin-icon">🪙</span> <span class="coins-value">0</span></div>
+      <div class="setup-block-wrap"><div class="setup-block">
         <label>Modo de jogo</label>
         <div class="choice-row" id="modeChoices"></div>
         <label>Quantos oponentes bots?</label>
@@ -243,7 +249,7 @@ button{font-family:inherit;cursor:pointer;}
         <input type="text" id="playerNameInput" class="name-input" placeholder="Você" maxlength="16">
         <label>Nomes dos bots (opcional)</label>
         <div class="bot-names-block" id="botNameInputs"></div>
-      </div>
+      </div></div>
       <button id="btnStart" class="start-overlay-btn start-cta-overlay" aria-label="Começar Corrida"></button>
       <button id="btnRules" class="start-overlay-btn start-rules-overlay" aria-label="Como jogar"></button>
     </div>
