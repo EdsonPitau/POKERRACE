@@ -7,6 +7,7 @@ const SUIT_COLOR = { S: 'black', C: 'black', H: 'red', D: 'red' };
 const RANK_LABEL = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
 
 function rankLabel(r) { return RANK_LABEL[r] || String(r); }
+function formatCards(cards) { return cards.map(c => `${rankLabel(c.rank)}${SUIT_SYMBOL[c.suit]}`).join(' '); }
 
 function freshDeck() {
   const deck = [];

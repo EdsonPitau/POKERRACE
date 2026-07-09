@@ -130,7 +130,7 @@ function createPlayers(numBots, humanColor) {
   const players = [{
     id: 0, name: (savedNames.player && savedNames.player.trim()) || 'Você', color: humanColor, isHuman: true,
     position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
-    betCoins: HOLDEM_STARTING_CHIPS, bettingActive: false, zeroCount: 0, raceWinnings: 0
+    betCoins: HOLDEM_STARTING_CHIPS, bettingActive: false, zeroCount: 0, raceWinnings: 0, folded: false, streetBet: 0
   }];
   for (let i = 0; i < numBots; i++) {
     const color = others[i];
@@ -138,7 +138,7 @@ function createPlayers(numBots, humanColor) {
     players.push({
       id: i + 1, name: customName || `Bot ${KART_LABEL[color]}`, color, isHuman: false,
       position: 0, hand: [], holeCards: [], discardedCount: 0, revealed: false, evalResult: null,
-      betCoins: HOLDEM_STARTING_CHIPS, bettingActive: false, zeroCount: 0, raceWinnings: 0
+      betCoins: HOLDEM_STARTING_CHIPS, bettingActive: false, zeroCount: 0, raceWinnings: 0, folded: false, streetBet: 0
     });
   }
   return players;
@@ -298,7 +298,9 @@ function renderPlayers() {
     card.className = 'player-chip' + (p.isHuman ? ' human' : '');
     const avatarHtml = `<img class="chip-kart" src="kart_${p.color}_token.png">`;
     let statusHtml = '';
-    if (p.revealed && p.evalResult) {
+    if (p.folded) {
+      statusHtml = `<div class="chip-hand muted">desistiu (fold)</div>`;
+    } else if (p.revealed && p.evalResult) {
       const revealedCards = state.mode === 'holdem' ? p.holeCards : p.hand;
       const miniCardsHtml = (revealedCards || []).map(c => `
         <span class="mini-card" style="color:${SUIT_COLOR[c.suit]}">${rankLabel(c.rank)}${SUIT_SYMBOL[c.suit]}</span>
@@ -602,6 +604,139 @@ function botWantsToBet(bot, evalSoFar) {
   return Math.random() < 0.35;
 }
 
+// Rough 0-9 strength estimate for a starting hand (pré-flop, no community cards yet), on
+// roughly the same scale as hand categories, just to give bots/pre-flop logic something to
+// compare against the same thresholds used post-flop.
+function preflopStrength(holeCards) {
+  const [a, b] = holeCards;
+  const pair = a.rank === b.rank;
+  const highCards = a.rank >= 11 && b.rank >= 11;
+  const suitedConnected = a.suit === b.suit && Math.abs(a.rank - b.rank) <= 2;
+  if (pair && a.rank >= 10) return 3;
+  if (pair) return 2;
+  if (highCards || suitedConnected) return 1;
+  return 0;
+}
+
+// Bot decision for one action in the betting queue. Mirrors what a human sees: fold/check/
+// call if facing no bet or a bet, bet/raise for value with strong hands.
+function botDecideAction(bot, toCall, revealedCount) {
+  const evalSoFar = revealedCount > 0
+    ? evaluateBestN(bot.holeCards.concat(state.community.slice(0, revealedCount)))
+    : null;
+  const strength = evalSoFar ? evalSoFar.category : preflopStrength(bot.holeCards);
+
+  if (toCall > 0 && bot.betCoins < toCall) return { type: 'fold' };
+
+  if (toCall === 0) {
+    const wantsToBet = botWantsToBet(bot, evalSoFar) && bot.betCoins >= 10;
+    if (wantsToBet) {
+      const amount = Math.min(strength >= 3 ? 25 : strength >= 1 ? 15 : 10, bot.betCoins);
+      return { type: 'bet', amount };
+    }
+    return { type: 'check' };
+  }
+
+  // facing a bet: fold weak hands to a big bet, otherwise call, occasionally raise strong hands
+  const facingBigBet = toCall >= 15;
+  if (strength === 0 && facingBigBet && Math.random() < 0.7) return { type: 'fold' };
+  if (strength >= 4 && bot.betCoins >= toCall + 10 && Math.random() < 0.5) {
+    const raiseTo = Math.min(state.currentBetLevel + 10, bot.streetBet + bot.betCoins);
+    return { type: 'raise', amount: raiseTo };
+  }
+  return { type: 'call' };
+}
+
+// Builds the human's available actions for #bettingPanel given the current street and how
+// much (if anything) they need to put in to stay in the hand, then waits for their choice.
+async function getHumanAction(human, streetLabel, toCall) {
+  if (toCall > 0 && human.betCoins < toCall) {
+    const ok = await ensureCoinsAndBet(human, toCall, true);
+    if (state.humanQuit) return { type: 'fold' };
+    if (!ok) return { type: 'fold' };
+  }
+  const options = [];
+  if (toCall <= 0) {
+    options.push({ label: 'Passar (Check)', value: { type: 'check' } });
+    [5, 10, 15, 20, 25].forEach(amt => {
+      if (amt <= human.betCoins) options.push({ label: `Apostar ${amt}`, value: { type: 'bet', amount: amt } });
+    });
+  } else {
+    options.push({ label: 'Desistir (Fold)', value: { type: 'fold' } });
+    options.push({ label: `Pagar ${toCall} (Call)`, value: { type: 'call' } });
+    [10, 15, 20, 25].forEach(totalAmt => {
+      const extra = totalAmt - human.streetBet;
+      if (totalAmt > state.currentBetLevel && extra <= human.betCoins) {
+        options.push({ label: `Aumentar para ${totalAmt} (Raise)`, value: { type: 'raise', amount: totalAmt } });
+      }
+    });
+  }
+  return await humanBetPrompt(`${streetLabel} — sua vez de agir`, options);
+}
+
+// Applies a resolved action (from human or bot) to the shared pot/coin state and logs it.
+function applyBettingAction(p, action) {
+  if (action.type === 'fold') {
+    p.folded = true;
+    log(`${p.name} desistiu (fold).`);
+    return;
+  }
+  if (action.type === 'check') {
+    log(`${p.name} passou (check).`);
+    return;
+  }
+  if (action.type === 'call') {
+    const amt = Math.max(0, Math.min(state.currentBetLevel - p.streetBet, p.betCoins));
+    p.betCoins -= amt; p.streetBet += amt; state.pot += amt;
+    log(`${p.name} pagou ${amt} moeda(s) (call).`);
+    return;
+  }
+  if (action.type === 'bet' || action.type === 'raise') {
+    const targetLevel = action.amount;
+    const amt = Math.max(0, targetLevel - p.streetBet);
+    p.betCoins -= amt; p.streetBet += amt; state.pot += amt;
+    state.currentBetLevel = targetLevel;
+    log(`${p.name} ${action.type === 'bet' ? 'apostou' : 'aumentou para'} ${targetLevel} moeda(s).`);
+  }
+}
+
+// Runs one full betting round (pré-flop, flop, turn or river) using a real action queue: each
+// active player acts once per pass, but a bet/raise re-opens the action, forcing everyone else
+// still in the hand to act again — the standard way poker betting rounds actually resolve.
+// Stops early if only one player remains active (everyone else folded).
+async function runBettingRound(streetLabel, revealedCount) {
+  state.players.forEach(p => { p.streetBet = 0; });
+  state.currentBetLevel = 0;
+
+  const order = state.players.map((_, i) => i);
+  let queue = order.filter(i => !state.players[i].folded);
+
+  while (queue.length > 0) {
+    if (state.players.filter(p => !p.folded).length <= 1) return;
+    const idx = queue.shift();
+    const p = state.players[idx];
+    if (p.folded) continue;
+
+    const toCall = state.currentBetLevel - p.streetBet;
+    const action = p.isHuman
+      ? await getHumanAction(p, streetLabel, toCall)
+      : botDecideAction(p, toCall, revealedCount);
+
+    applyBettingAction(p, action);
+    renderPlayers();
+
+    if (action.type === 'fold') {
+      if (state.players.filter(pl => !pl.folded).length <= 1) return;
+      continue;
+    }
+    if (action.type === 'bet' || action.type === 'raise') {
+      // action reopens: everyone else still active must respond to the new bet level
+      queue = order.filter(i => i !== idx && !state.players[i].folded);
+    }
+    await delay(250);
+  }
+}
+
 // Ensures a player (human or bot) always has enough coins to bet `amount`, running the
 // zero-coins flow if needed. Returns true if the player ends up able to (and does) bet.
 async function ensureCoinsAndBet(p, amount, isHuman) {
@@ -678,6 +813,23 @@ async function moveEveryone() {
       log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
     }
   });
+  revealRaceBoardIfNeeded();
+  await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
+}
+
+// Texas Hold'em movement: players who folded forfeit the pot AND don't advance this round —
+// they stay exactly where they are, but still occupy their cell (so movers correctly cascade
+// around them, same as any other collision).
+async function moveHoldemRound() {
+  const active = state.players.filter(p => !p.folded);
+  const folded = state.players.filter(p => p.folded);
+  const targets = resolveMovementTargets(active, folded);
+  targets.forEach(t => {
+    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < 100) {
+      log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
+    }
+  });
+  folded.forEach(p => log(`${p.name} desistiu da mão e não avança nesta rodada.`));
   revealRaceBoardIfNeeded();
   await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
 }
@@ -782,8 +934,8 @@ async function playRoundDraw() {
   state.players.forEach(p => {
     const isWinner = winners.includes(p);
     log(isWinner
-      ? `${p.name}: ${p.evalResult.name} — avança ${p.evalResult.moveDistance} casa(s)!`
-      : `${p.name}: ${p.evalResult.name} — não é a melhor mão, fica parado.`);
+      ? `${p.name}: ${p.evalResult.name} (${formatCards(p.hand)}) — avança ${p.evalResult.moveDistance} casa(s)!`
+      : `${p.name}: ${p.evalResult.name} (${formatCards(p.hand)}) — não é a melhor mão, fica parado.`);
   });
   updatePhase(winners.length > 1 ? `Empate! ${winnerNames} avançam!` : `${winnerNames} tem a melhor mão e avança!`);
   await delay(700);
@@ -805,7 +957,8 @@ async function playRoundHoldem() {
     p.discardedCount = 0;
     p.revealed = false;
     p.evalResult = null;
-    p.bettingActive = false;
+    p.folded = false;
+    p.streetBet = 0;
   });
   state.community = state.deck.splice(0, 5);
   renderPlayers();
@@ -815,82 +968,45 @@ async function playRoundHoldem() {
 
   if (state.humanQuit) { await concludeHoldemRace(); return; }
 
-  // ---- Pré-Flop: 5 coins to participate in betting this round ----
-  updatePhase('Pré-Flop — aposte 5 moedas para participar das apostas');
-  const human = state.players[0];
-  const canAffordPreflop = human.betCoins >= 5;
-  if (canAffordPreflop) {
-    const wantsToBet = await humanBetPrompt('Apostar 5 moedas no pré-flop?', [
-      { label: 'Apostar 5 moedas', value: true },
-      { label: 'Não apostar', value: false }
-    ]);
-    if (wantsToBet) {
-      human.betCoins -= 5;
-      state.pot += 5;
-      human.bettingActive = true;
-      log('Você apostou 5 moedas no pré-flop.');
-    } else {
-      log('Você optou por não apostar nesta rodada (ainda avança normalmente).');
-    }
-  } else {
-    log('Você não tem moedas suficientes para o pré-flop.');
-  }
-  for (let i = 1; i < state.players.length; i++) {
-    const bot = state.players[i];
-    if (bot.betCoins >= 5 && botWantsToBet(bot, null)) {
-      bot.betCoins -= 5; state.pot += 5; bot.bettingActive = true;
-      log(`${bot.name} apostou 5 moedas no pré-flop.`);
-    }
-  }
-  renderPlayers();
-  await delay(500);
-
-  // ---- Flop / Turn / River ----
   const streets = [
-    { name: 'Flop', count: 3, label: 'flop' },
-    { name: 'Turn', count: 1, label: 'turn' },
-    { name: 'River', count: 1, label: 'river' }
+    { name: 'Pré-Flop', revealTo: 0 },
+    { name: 'Flop', revealTo: 3 },
+    { name: 'Turn', revealTo: 4 },
+    { name: 'River', revealTo: 5 }
   ];
-  let revealedCount = 0;
-  for (const street of streets) {
-    revealedCount += street.count;
-    updatePhase(`${street.name} — revelando carta(s) comunitária(s)…`);
-    for (let i = revealedCount - street.count + 1; i <= revealedCount; i++) {
-      updateCommunitySlots(state.community.slice(0, i));
-      await delay(400);
-    }
-    await delay(300);
 
-    if (human.bettingActive) {
-      const soFar = evaluateBestN(human.holeCards.concat(state.community.slice(0, revealedCount)));
-      const canAfford = human.betCoins >= 5;
-      if (canAfford) {
-        const amounts = [5, 10, 15, 20, 25].filter(a => a <= human.betCoins);
-        const options = amounts.map(a => ({ label: `Apostar ${a} moedas`, value: a }));
-        options.push({ label: 'Passar (0)', value: 0 });
-        const bet = await humanBetPrompt(`${street.name} — quanto apostar (até 25 moedas)?`, options);
-        if (bet > 0) { human.betCoins -= bet; state.pot += bet; log(`Você apostou ${bet} moedas no ${street.name}.`); }
-      } else {
-        const ok = await ensureCoinsAndBet(human, 5, true);
-        if (state.humanQuit) { await concludeHoldemRace(); return; }
-        if (ok) { human.betCoins -= 5; state.pot += 5; log(`Você apostou 5 moedas no ${street.name}.`); }
-      }
+  let handDecidedByFold = false;
+  let previouslyRevealed = 0;
+  for (const street of streets) {
+    // reveal this street's new community card(s), one at a time, before betting starts
+    for (let i = previouslyRevealed; i < street.revealTo; i++) {
+      updateCommunitySlots(state.community.slice(0, i + 1));
+      await delay(350);
     }
-    for (let i = 1; i < state.players.length; i++) {
-      const bot = state.players[i];
-      if (!bot.bettingActive) continue;
-      const soFar = evaluateBestN(bot.holeCards.concat(state.community.slice(0, revealedCount)));
-      if (bot.betCoins >= 25 && botWantsToBet(bot, soFar)) {
-        bot.betCoins -= 25; state.pot += 25;
-        log(`${bot.name} apostou 25 moedas no ${street.name}.`);
-      }
+    previouslyRevealed = street.revealTo;
+    if (street.revealTo > 0) await delay(200);
+
+    updatePhase(`${street.name} — apostas`);
+    await runBettingRound(street.name, street.revealTo);
+    if (state.humanQuit) { await concludeHoldemRace(); return; }
+
+    if (state.players.filter(p => !p.folded).length <= 1) {
+      handDecidedByFold = true;
+      break;
     }
-    renderPlayers();
+  }
+
+  // If the hand ended early because everyone else folded, still reveal the remaining board
+  // (no more betting) so the lone survivor's final hand — and therefore moveDistance — can be
+  // computed, matching "todos avançam conforme sua mão".
+  if (handDecidedByFold) {
+    updateCommunitySlots(state.community);
   }
 
   updatePhase('Showdown! Revelando as mãos…');
   await delay(400);
-  state.players.forEach(p => {
+  const activePlayers = state.players.filter(p => !p.folded);
+  activePlayers.forEach(p => {
     p.evalResult = evaluateBest7(p.holeCards.concat(state.community));
     p.revealed = true;
   });
@@ -898,12 +1014,11 @@ async function playRoundHoldem() {
   renderPlayers();
   await delay(300);
 
-  // ---- Pot payout: best hand among active bettors wins ----
-  const bettors = state.players.filter(p => p.bettingActive);
-  if (bettors.length > 0 && state.pot > 0) {
-    let best = bettors[0].evalResult;
-    bettors.forEach(p => { if (compareHands(p.evalResult, best) > 0) best = p.evalResult; });
-    const potWinners = bettors.filter(p => compareHands(p.evalResult, best) === 0);
+  // ---- Pot payout: best hand among active (non-folded) players wins ----
+  if (activePlayers.length > 0 && state.pot > 0) {
+    let best = activePlayers[0].evalResult;
+    activePlayers.forEach(p => { if (compareHands(p.evalResult, best) > 0) best = p.evalResult; });
+    const potWinners = activePlayers.filter(p => compareHands(p.evalResult, best) === 0);
     const share = Math.floor(state.pot / potWinners.length);
     potWinners.forEach(p => {
       p.betCoins += share;
@@ -912,11 +1027,11 @@ async function playRoundHoldem() {
     log(`${potWinners.map(p => p.name).join(' e ')} venceu(ram) o pote de ${state.pot} moedas!`);
   }
 
-  state.players.forEach(p => log(`${p.name}: ${p.evalResult.name} — avança ${p.evalResult.moveDistance} casa(s)!`));
-  updatePhase('Todos avançam conforme sua mão!');
+  activePlayers.forEach(p => log(`${p.name}: ${p.evalResult.name} (${formatCards(p.holeCards)}) — avança ${p.evalResult.moveDistance} casa(s)!`));
+  updatePhase(handDecidedByFold ? 'Os demais desistiram — só quem ficou avança!' : 'Quem não desistiu avança conforme sua mão!');
   await delay(700);
 
-  await moveEveryone();
+  await moveHoldemRound();
   renderPlayers();
 
   await finishRoundOrContinue(playRoundHoldem);
