@@ -13,7 +13,7 @@ let humanDrawResolver = null;
 let humanBetResolver = null;
 let humanZeroResolver = null;
 let tokenElements = new Map(); // player -> its persistent <img> kart token element
-const HOLDEM_STARTING_CHIPS = 2000; // in-race betting bankroll (funny money, not real coins)
+const HOLDEM_STARTING_CHIPS = 1000; // in-race betting bankroll (funny money, not real coins) — matches the 1.000-coin entry requirement
 
 // ---------------- Coins (persisted for the human player only) ----------------
 const COINS_KEY = 'pokerrace_coins_v2';
@@ -1130,6 +1130,7 @@ function backToMenu() {
     if (!ok) return;
   }
   state = null;
+  $('#bettingPanel').classList.add('hidden');
   showScreen('screen-start');
   initSetupScreen();
 }
@@ -1141,6 +1142,7 @@ async function startGame() {
   };
   showScreen('screen-game');
   $('#logPanel').innerHTML = '';
+  $('#bettingPanel').classList.add('hidden');
   await initBoard();
   initCommunitySlots();
   renderPlayers();
