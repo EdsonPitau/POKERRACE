@@ -343,6 +343,16 @@ function sampleDistinct(pool, k) {
   return out;
 }
 
+// Folds a full tiebreak array (e.g. [pairRank, kicker1, kicker2, kicker3] for a Par) into one
+// comparable number, higher-significance positions dominating — so two hands of the same
+// category but different kickers (e.g. pair of 8s + a 9 vs pair of 8s + a 2) actually compare
+// as different, instead of only the category-defining rank (tiebreak[0]) being tracked.
+function tiebreakScore(tiebreak) {
+  let score = 0;
+  for (let i = 0; i < tiebreak.length; i++) score += (tiebreak[i] || 0) / Math.pow(15, i);
+  return score;
+}
+
 function analyzeDiscardOptions(hand, opponentCount) {
   const handIds = new Set(hand.map(c => c.id));
   const pool = freshDeck().filter(c => !handIds.has(c.id)); // 47 unseen cards
@@ -374,9 +384,11 @@ function analyzeDiscardOptions(hand, opponentCount) {
       }
 
       winTotal += weWin ? ourEval.moveDistance : 0;
-      kickerTotal += ourEval.tiebreak[0]; // the rank that decides ties within the same category
-                                          // against opponents (e.g. the lone high card when
-                                          // everyone's stuck on Carta Alta, or the pair's rank)
+      kickerTotal += tiebreakScore(ourEval.tiebreak); // the full tiebreak (category rank +
+                                                       // kickers), not just the first entry —
+                                                       // that's what actually decides ties
+                                                       // against opponents in every case, not
+                                                       // just the "everyone has Carta Alta" one.
       if (ourEval.moveDistance >= 5) bigCount++;
       if (ourEval.moveDistance < currentDistance) worseCount++;
     }
@@ -1161,6 +1173,12 @@ function initApp() {
   $('#btnRules').onclick = () => $('#rulesModal').classList.remove('hidden');
   $('#btnRulesGame').onclick = () => $('#rulesModal').classList.remove('hidden');
   $('#btnCloseRules').onclick = () => $('#rulesModal').classList.add('hidden');
+  $('#btnShowHistory').onclick = () => {
+    $('#historyLogCopy').innerHTML = $('#logPanel').innerHTML;
+    $('#historyModal').classList.remove('hidden');
+    $('#historyLogCopy').scrollTop = $('#historyLogCopy').scrollHeight;
+  };
+  $('#btnCloseHistory').onclick = () => $('#historyModal').classList.add('hidden');
   $('#btnRestart').onclick = () => { showScreen('screen-start'); initSetupScreen(); };
   $('#btnMenu').onclick = backToMenu;
   wireZeroCoinsModal();

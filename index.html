@@ -138,6 +138,8 @@ button{font-family:inherit;cursor:pointer;}
 
 /* ---------- Betting panel (Hold'em) ---------- */
 .betting-panel{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:2px solid var(--yellow-deep);padding:16px;z-index:90;box-shadow:0 -6px 18px rgba(0,0,0,.5);}
+.history-btn{position:absolute;top:10px;right:12px;background:var(--panel-2);border:1px solid var(--yellow-deep);color:var(--yellow);width:34px;height:34px;border-radius:50%;font-size:1rem;line-height:1;}
+.history-log-copy{max-height:50vh;margin:10px 0;}
 .betting-panel.hidden{display:none;}
 #bettingQuestion{font-weight:800;text-align:center;margin-bottom:10px;color:var(--yellow);}
 .betting-options{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
@@ -219,13 +221,23 @@ button{font-family:inherit;cursor:pointer;}
   background:#12130e;
   clip-path:polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
   padding:8px 6px;
+  position:relative;
   filter:drop-shadow(0 0 2px var(--kart-glow)) drop-shadow(0 0 5px var(--kart-glow));
 }
-.kart-choice img{width:36px;display:block;}
+.kart-choice img{width:36px;display:block;position:relative;z-index:1;}
 .kart-choice.active{opacity:1;}
 .kart-choice.active .kart-hex{filter:drop-shadow(0 0 3px var(--kart-glow)) drop-shadow(0 0 8px var(--kart-glow)) drop-shadow(0 0 2px #f6dd8c);}
 .kart-choice .kart-label{color:#cfc39c;font-size:.62rem;white-space:nowrap;}
 .kart-choice.active .kart-label{color:#f6dd8c;}
+/* Neon "ground glow" under the selected kart — makes the current selection unmistakable. */
+.kart-choice::after{
+  content:'';position:absolute;left:50%;bottom:-4px;width:70%;height:10px;
+  transform:translateX(-50%);border-radius:50%;
+  background:var(--kart-glow, var(--yellow));
+  opacity:0;filter:blur(6px);transition:opacity .15s;
+  pointer-events:none;
+}
+.kart-choice.active::after{opacity:.85;}
 
 .inline-name-row{display:flex;align-items:center;gap:10px;margin:16px 0 10px;}
 .inline-label{color:#c9ad63;font-size:.72rem;margin:0;white-space:nowrap;flex-shrink:0;}
@@ -300,10 +312,19 @@ button{font-family:inherit;cursor:pointer;}
     <div class="log-panel" id="logPanel"></div>
 
     <div class="betting-panel hidden" id="bettingPanel">
+      <button id="btnShowHistory" class="history-btn" title="Ver histórico">📜</button>
       <div id="bettingQuestion">Apostar?</div>
       <div class="betting-options" id="bettingOptions"></div>
     </div>
   </section>
+
+  <div id="historyModal" class="modal hidden">
+    <div class="modal-box">
+      <h3>📜 Histórico</h3>
+      <div class="log-panel history-log-copy" id="historyLogCopy"></div>
+      <button id="btnCloseHistory" class="btn-primary">Fechar</button>
+    </div>
+  </div>
 
   <section id="screen-end" class="screen">
     <h1 id="endTitle">🏆 Vencedor!</h1>
