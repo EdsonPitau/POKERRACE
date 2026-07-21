@@ -139,7 +139,6 @@ button{font-family:inherit;cursor:pointer;}
 
 /* ---------- Betting panel (Hold'em) ---------- */
 .betting-panel{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:2px solid var(--yellow-deep);padding:16px;z-index:90;box-shadow:0 -6px 18px rgba(0,0,0,.5);}
-.history-btn{position:absolute;top:10px;right:12px;background:var(--panel-2);border:1px solid var(--yellow-deep);color:var(--yellow);width:34px;height:34px;border-radius:50%;font-size:1rem;line-height:1;}
 .history-log-copy{max-height:50vh;margin:10px 0;}
 .betting-panel.hidden{display:none;}
 #bettingQuestion{font-weight:800;text-align:center;margin-bottom:10px;color:var(--yellow);}
@@ -288,6 +287,7 @@ button{font-family:inherit;cursor:pointer;}
       <button id="btnMenu" class="icon-btn menu-btn" title="Voltar ao Menu Principal">☰ Menu</button>
       <div class="round-info">Rodada <span id="roundNum">1</span></div>
       <div class="header-coins">🪙 <span class="coins-value">0</span></div>
+      <button id="btnShowHistory" class="icon-btn" title="Ver histórico">📜</button>
       <button id="btnRulesGame" class="icon-btn">?</button>
     </header>
 
@@ -313,7 +313,6 @@ button{font-family:inherit;cursor:pointer;}
     <div class="log-panel" id="logPanel"></div>
 
     <div class="betting-panel hidden" id="bettingPanel">
-      <button id="btnShowHistory" class="history-btn" title="Ver histórico">📜</button>
       <div id="bettingQuestion">Apostar?</div>
       <div class="betting-options" id="bettingOptions"></div>
     </div>
