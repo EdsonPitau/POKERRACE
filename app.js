@@ -212,7 +212,7 @@ function renderTokens() {
 
   const groups = {};
   state.players.forEach(p => {
-    const clamped = Math.max(0, Math.min(p.position, 100));
+    const clamped = Math.max(0, Math.min(p.position, TOTAL_RACE_LENGTH));
     // Group by the physical cell on the loop, not the raw absolute position — two karts on
     // different laps can land on the same visual cell and need to share it like any other
     // collision, not silently stack on top of each other.
@@ -319,8 +319,8 @@ function renderPlayers() {
     } else {
       statusHtml = `<div class="chip-hand muted">pronto</div>`;
     }
-    const clamped = Math.min(p.position, 100);
-    const posLabel = clamped <= 0 ? 'Casa 0' : `Casa ${cellInLap(clamped)} · V${lapOf(clamped)}/4`;
+    const clamped = Math.min(p.position, TOTAL_RACE_LENGTH);
+    const posLabel = clamped <= 0 ? 'Casa 0' : `Casa ${cellInLap(clamped)} · V${lapOf(clamped)}/${TOTAL_LAPS}`;
     let bankHtml = '';
     if (state.mode === 'holdem') {
       const delta = p.betCoins - HOLDEM_STARTING_CHIPS;
@@ -783,7 +783,7 @@ async function ensureCoinsAndBet(p, amount, isHuman) {
 // ---------------- Animation: move token to an explicit target ----------------
 async function animateMoveTo(player, target) {
   const from = player.position;
-  const steps = Math.max(0, Math.min(target, 100) - Math.min(from, 100));
+  const steps = Math.max(0, Math.min(target, TOTAL_RACE_LENGTH) - Math.min(from, TOTAL_RACE_LENGTH));
   const dir = target >= from ? 1 : -1;
   for (let s = 1; s <= steps; s++) {
     player.position = from + dir * s;
@@ -806,8 +806,8 @@ async function animateMoveTo(player, target) {
 function resolveMovementTargets(players, stationaryPlayers, distanceOverrides) {
   const distanceFor = p => (distanceOverrides && distanceOverrides.has(p)) ? distanceOverrides.get(p) : p.evalResult.moveDistance;
   const withRaw = players.map(p => ({ player: p, raw: p.position + distanceFor(p) }));
-  const finishers = withRaw.filter(w => w.raw >= 100);
-  const movers = withRaw.filter(w => w.raw < 100)
+  const finishers = withRaw.filter(w => w.raw >= TOTAL_RACE_LENGTH);
+  const movers = withRaw.filter(w => w.raw < TOTAL_RACE_LENGTH)
     .sort((a, b) => compareHands(b.player.evalResult, a.player.evalResult));
 
   const results = finishers.map(f => ({ player: f.player, target: f.raw }));
@@ -820,7 +820,7 @@ function resolveMovementTargets(players, stationaryPlayers, distanceOverrides) {
       // Compare by the physical cell on the loop (cellInLap), not the raw position — a cell on
       // lap 1 and the "same" cell on lap 2 are the same physical spot on the board and must
       // share the 2-per-cell cap together.
-      const occupants = results.filter(r => r.target < 100 && cellInLap(r.target) === cellInLap(target)).length;
+      const occupants = results.filter(r => r.target < TOTAL_RACE_LENGTH && cellInLap(r.target) === cellInLap(target)).length;
       if (occupants < 2) break;
       target--;
     }
@@ -832,7 +832,7 @@ function resolveMovementTargets(players, stationaryPlayers, distanceOverrides) {
 async function moveEveryone() {
   const targets = resolveMovementTargets(state.players);
   targets.forEach(t => {
-    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < 100) {
+    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < TOTAL_RACE_LENGTH) {
       log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
     }
   });
@@ -848,7 +848,7 @@ async function moveHoldemRound() {
   const folded = state.players.filter(p => p.folded);
   const targets = resolveMovementTargets(active, folded);
   targets.forEach(t => {
-    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < 100) {
+    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < TOTAL_RACE_LENGTH) {
       log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
     }
   });
@@ -870,7 +870,7 @@ async function moveWinnersOnly(winners, allPlayers) {
   const stationary = allPlayers.filter(p => !winners.includes(p));
   const targets = resolveMovementTargets(winners, stationary);
   targets.forEach(t => {
-    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < 100) {
+    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < TOTAL_RACE_LENGTH) {
       log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
     }
   });
@@ -886,7 +886,7 @@ function computeFinalRanking(players) {
   for (let i = 0; i < sorted.length; i++) {
     if (i > 0) {
       const prev = sorted[i - 1], cur = sorted[i];
-      const exactTie = prev.position === cur.position && prev.position >= 100 &&
+      const exactTie = prev.position === cur.position && prev.position >= TOTAL_RACE_LENGTH &&
         prev.evalResult && cur.evalResult && compareHands(prev.evalResult, cur.evalResult) === 0;
       if (!exactTie) currentRank = currentRank + 1; // compress: next distinct rank is prevRank+1, not index+1
     }
@@ -912,7 +912,7 @@ async function playRoundDraw() {
   updatePhase('Embaralhando e distribuindo cartas…');
   state.deck = shuffle(freshDeck());
   state.players.forEach(p => {
-    p.hand = p.position >= 100 ? p.hand : state.deck.splice(0, 5);
+    p.hand = p.position >= TOTAL_RACE_LENGTH ? p.hand : state.deck.splice(0, 5);
     p.discardedCount = null;
     p.revealed = false;
     p.evalResult = null;
@@ -1061,7 +1061,7 @@ async function playRoundHoldem() {
 }
 
 async function concludeHoldemRace() {
-  const finishers = state.players.filter(p => p.position >= 100);
+  const finishers = state.players.filter(p => p.position >= TOTAL_RACE_LENGTH);
   const champion = finishers.length > 0
     ? finishers.slice().sort((a, b) => b.position - a.position)[0]
     : state.players.slice().sort((a, b) => b.position - a.position)[0];
@@ -1072,7 +1072,7 @@ async function concludeHoldemRace() {
 // ---------------- Shared: check for finish, else continue ----------------
 async function finishRoundOrContinue(nextRoundFn) {
   if (state.humanQuit) { await concludeHoldemRace(); return; }
-  const finishers = state.players.filter(p => p.position >= 100);
+  const finishers = state.players.filter(p => p.position >= TOTAL_RACE_LENGTH);
   if (finishers.length > 0) {
     await delay(500);
     endGame(finishers[0]);
@@ -1114,7 +1114,7 @@ function endGame(champion) {
       <span class="rank-num">${r.rank}º</span>
       <img class="rank-kart" src="kart_${r.player.color}_token.png">
       <span class="rank-name">${r.player.name}</span>
-      <span class="rank-pos">casa ${Math.min(r.player.position, 100)}</span>
+      <span class="rank-pos">casa ${Math.min(r.player.position, TOTAL_RACE_LENGTH)}</span>
     </div>`).join('');
 
   const payoutEl = $('#endPayout');

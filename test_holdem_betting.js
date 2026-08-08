@@ -32,6 +32,8 @@ eval(extract('preflopStrength'));
 eval(extract('botDecideAction'));
 eval(extract('applyBettingAction'));
 eval(extract('runBettingRound'));
+const TOTAL_RACE_LENGTH = 75; // must match CELLS_PER_LAP * TOTAL_LAPS in board.js — eval'd
+                               // const declarations don't leak into this scope, only functions do
 eval(extract('resolveMovementTargets'));
 
 function C(str) {

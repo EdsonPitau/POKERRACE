@@ -49,7 +49,8 @@ function buildLoopCells() {
 
 const LOOP_CELLS = buildLoopCells();
 const CELLS_PER_LAP = 25;
-const TOTAL_LAPS = 4;
+const TOTAL_LAPS = 3;
+const TOTAL_RACE_LENGTH = CELLS_PER_LAP * TOTAL_LAPS; // 75 — the finish line position
 
 // ---------- Lap / absolute-position helpers ----------
 // The game's positions are still 1-100 (100 casas total) — this just maps that absolute

@@ -3,11 +3,15 @@ const engine = require('fs').readFileSync(__dirname + '/engine.js', 'utf8');
 const board = require('fs').readFileSync(__dirname + '/board.js', 'utf8');
 eval(engine);
 eval(board);
+// NOTE: eval'd `const` declarations (like board.js's own TOTAL_RACE_LENGTH) don't leak into
+// this outer scope — only function declarations do, via their own closures. Mirror the value
+// here instead of trying to reference it directly.
+const TOTAL_RACE_LENGTH = 75; // must match CELLS_PER_LAP * TOTAL_LAPS in board.js
 
 function resolveMovementTargets(players) {
   const withRaw = players.map(p => ({ player: p, raw: p.position + p.evalResult.moveDistance }));
-  const finishers = withRaw.filter(w => w.raw >= 100);
-  const movers = withRaw.filter(w => w.raw < 100)
+  const finishers = withRaw.filter(w => w.raw >= TOTAL_RACE_LENGTH);
+  const movers = withRaw.filter(w => w.raw < TOTAL_RACE_LENGTH)
     .sort((a, b) => compareHands(b.player.evalResult, a.player.evalResult));
   const results = finishers.map(f => ({ player: f.player, target: f.raw }));
   movers.forEach(m => {
@@ -15,7 +19,7 @@ function resolveMovementTargets(players) {
     while (target > m.player.position) {
       // Compare by the physical cell on the 25-cell loop (cellInLap), not the raw absolute
       // position — a cell on lap 1 and the "same" cell on lap 2+ are the same physical spot.
-      const occupants = results.filter(r => r.target < 100 && cellInLap(r.target) === cellInLap(target)).length;
+      const occupants = results.filter(r => r.target < TOTAL_RACE_LENGTH && cellInLap(r.target) === cellInLap(target)).length;
       if (occupants < 2) break;
       target--;
     }
@@ -106,14 +110,14 @@ function check(name, cond) {
       const hand = deck.slice(0, 5);
       players.push({
         name: 'P' + i,
-        position: Math.floor(Math.random() * 90),
+        position: Math.floor(Math.random() * (TOTAL_RACE_LENGTH - 10)),
         evalResult: evaluateHand(hand)
       });
     }
     const results = resolveMovementTargets(players);
     const counts = {};
     results.forEach(r => {
-      if (r.target < 100) counts[r.target] = (counts[r.target] || 0) + 1;
+      if (r.target < TOTAL_RACE_LENGTH) counts[r.target] = (counts[r.target] || 0) + 1;
     });
     Object.values(counts).forEach(c => { if (c > 2) violations++; });
     // also verify nobody moved backward past their own start
@@ -126,12 +130,12 @@ function check(name, cond) {
 {
   const hand = evaluateHand(C('AS KS QS JS TS'));
   const players = [
-    { name: 'F1', position: 95, evalResult: { ...hand, moveDistance: 10 } }, // target 105
-    { name: 'F2', position: 92, evalResult: { ...hand, moveDistance: 8 } },  // target 100
-    { name: 'F3', position: 90, evalResult: { ...hand, moveDistance: 10 } }, // target 100
+    { name: 'F1', position: 70, evalResult: { ...hand, moveDistance: 10 } }, // target 80
+    { name: 'F2', position: 67, evalResult: { ...hand, moveDistance: 8 } },  // target 75
+    { name: 'F3', position: 65, evalResult: { ...hand, moveDistance: 10 } }, // target 75
   ];
   const results = resolveMovementTargets(players);
-  const allFinished = results.every(r => r.target >= 100);
+  const allFinished = results.every(r => r.target >= TOTAL_RACE_LENGTH);
   check('all 3 simultaneous finishers keep their raw target (no cap at finish)', allFinished);
 }
 
@@ -156,7 +160,7 @@ function check(name, cond) {
   check('6-card evaluator finds Royal Flush', r6.name === 'Royal Flush');
 }
 
-// ---- TEST 7: heading around the new 25-cell loop (4 laps x 25 = 100 casas) — checks the
+// ---- TEST 7: heading around the new 25-cell loop (3 laps x 25 = 75 casas) — checks the
 // corner transitions land on the correct cell, not one early or late ----
 {
   check('cell5 still faces LEFT (0) — end of the top row before the early turn', cellHeadingDeg(5) === 0);
@@ -170,7 +174,7 @@ function check(name, cond) {
   check('cell25 (finish) faces LEFT (0)', cellHeadingDeg(25) === 0);
   // headings must also work for absolute positions beyond lap 1 (e.g. position 32 = lap2 cell7)
   check('position 32 (lap 2, cell 7) faces DOWN (270), same as cell7', cellHeadingDeg(32) === 270);
-  check('position 76 (lap 4, cell 1) faces LEFT (0), same as cell1', cellHeadingDeg(76) === 0);
+  check('position 57 (lap 3, cell 7) faces DOWN (270), same as cell7', cellHeadingDeg(57) === 270);
 }
 
 // ---- TEST 8: lap/cell mapping is correct at every lap boundary ----
@@ -180,7 +184,7 @@ function check(name, cond) {
   check('position 26 = lap 2, cell 1 (start of lap 2)', lapOf(26) === 2 && cellInLap(26) === 1);
   check('position 50 = lap 2, cell 25', lapOf(50) === 2 && cellInLap(50) === 25);
   check('position 51 = lap 3, cell 1', lapOf(51) === 3 && cellInLap(51) === 1);
-  check('position 100 = lap 4, cell 25 (finish)', lapOf(100) === 4 && cellInLap(100) === 25);
+  check('position 75 = lap 3, cell 25 (finish)', lapOf(75) === 3 && cellInLap(75) === 25);
 }
 
 // ---- TEST 9: two karts on DIFFERENT laps landing on the same physical cell still respect
