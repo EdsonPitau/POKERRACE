@@ -1,4 +1,4 @@
-const CACHE_NAME = 'poker-race-v15';
+const CACHE_NAME = 'poker-race-v16';
 const ASSETS = [
   './',
   './index.html',
@@ -6,7 +6,6 @@ const ASSETS = [
   './board.js',
   './app.js',
   './manifest.json',
-  './logo.png',
   './board_bg.jpg',
   './board_start.jpg',
   './start_bg.jpg',
@@ -15,7 +14,7 @@ const ASSETS = [
   './kart_green_token.png',
   './kart_red_token.png',
   './icons/icon-32.png', './icons/icon-180.png',
-  './icons/icon-192.png', './icons/icon-512.png'
+  './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png'
 ];
 
 self.addEventListener('install', event => {
