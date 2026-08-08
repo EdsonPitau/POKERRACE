@@ -351,17 +351,7 @@ function sampleDistinct(pool, k) {
   return out;
 }
 
-// Folds a full tiebreak array (e.g. [pairRank, kicker1, kicker2, kicker3] for a Par) into one
-// comparable number, higher-significance positions dominating — so two hands of the same
-// category but different kickers (e.g. pair of 8s + a 9 vs pair of 8s + a 2) actually compare
-// as different, instead of only the category-defining rank (tiebreak[0]) being tracked.
-function tiebreakScore(tiebreak) {
-  let score = 0;
-  for (let i = 0; i < tiebreak.length; i++) score += (tiebreak[i] || 0) / Math.pow(15, i);
-  return score;
-}
-
-function analyzeDiscardOptions(hand, opponentCount) {
+function analyzeDiscardOptions(hand) {
   // state.deck at this point already excludes every player's dealt hand (human AND bots) —
   // it's the true set of cards that could still be drawn. Using a naive "47 unseen cards"
   // pool instead would let the simulation "draw" cards that are actually already sitting in
@@ -375,40 +365,22 @@ function analyzeDiscardOptions(hand, opponentCount) {
     const discardIdx = [], keepIdx = [];
     for (let i = 0; i < 5; i++) { if (mask & (1 << i)) discardIdx.push(i); else keepIdx.push(i); }
     const keepCards = keepIdx.map(i => hand[i]);
-    let winTotal = 0, bigCount = 0, worseCount = 0, kickerTotal = 0;
+    let distanceTotal = 0, bigCount = 0, worseCount = 0;
     for (let t = 0; t < TRIALS; t++) {
       const ourHand = discardIdx.length === 0 ? hand : keepCards.concat(sampleDistinct(pool, discardIdx.length));
       const ourEval = evaluateHand(ourHand);
 
-      // We still don't peek at the opponents' actual dealt cards for this comparison (that
-      // would turn the hint into a cheat) — they're modeled as a random hand drawn from the
-      // same true remaining pool, which is the best estimate possible without seeing their
-      // cards. Only count the move if we actually beat (or tie) everyone — that's what the
-      // "only the best hand advances" rule really requires.
-      const usedIds = new Set(ourHand.map(c => c.id));
-      const remaining = pool.filter(c => !usedIds.has(c.id));
-      const oppCards = sampleDistinct(remaining, 5 * opponentCount);
-      let weWin = true;
-      for (let o = 0; o < opponentCount; o++) {
-        const oppEval = evaluateHand(oppCards.slice(o * 5, o * 5 + 5));
-        if (compareHands(oppEval, ourEval) > 0) { weWin = false; break; }
-      }
-
-      winTotal += weWin ? ourEval.moveDistance : 0;
-      kickerTotal += tiebreakScore(ourEval.tiebreak); // the full tiebreak (category rank +
-                                                       // kickers), not just the first entry —
-                                                       // that's what actually decides ties
-                                                       // against opponents in every case, not
-                                                       // just the "everyone has Carta Alta" one.
+      // Every player now advances by their own hand each round — no need to beat anyone
+      // else's hand, so the simulation just tracks the expected moveDistance directly.
+      distanceTotal += ourEval.moveDistance;
       if (ourEval.moveDistance >= 5) bigCount++;
       if (ourEval.moveDistance < currentDistance) worseCount++;
     }
     options.push({
       discardIdx,
-      expected: winTotal / TRIALS, // now already weighted by chance of actually winning the round
+      expected: distanceTotal / TRIALS,
       pBig: bigCount / TRIALS,
-      pWorse: worseCount / TRIALS,
-      avgTopKicker: kickerTotal / TRIALS
+      pWorse: worseCount / TRIALS
     });
   }
   return options;
@@ -432,14 +404,9 @@ function raceUrgency(human, allPlayers) {
   return 'normal';
 }
 
-// Small, principled nudge toward the higher kicker: it only matters when your final category
-// ties an opponent's (whoever has the best hand advances — everyone else stays put), so it's
-// weighted lightly enough to never override a real difference in expected casas advanced.
-const KICKER_WEIGHT = 0.4;
-
 function pickBestOption(options, urgency) {
   const scored = options.map(o => {
-    let score = o.expected + KICKER_WEIGHT * (o.avgTopKicker - 8) / 6;
+    let score = o.expected;
     if (urgency === 'aggressive') score += o.pBig * 3;       // reward upside potential
     if (urgency === 'conservative') score -= o.pWorse * 4;   // punish downside risk
     return { ...o, score };
@@ -463,8 +430,7 @@ function showHint() {
 function computeAndApplyHint() {
   const human = state.players[0];
   const urgency = raceUrgency(human, state.players);
-  const opponentCount = state.players.length - 1;
-  const options = analyzeDiscardOptions(human.hand, opponentCount);
+  const options = analyzeDiscardOptions(human.hand);
   const standPat = options.find(o => o.discardIdx.length === 0);
   const best = pickBestOption(options, urgency);
   selectedDiscards = new Set(best.discardIdx);
@@ -478,7 +444,7 @@ function computeAndApplyHint() {
   }[urgency];
 
   if (best.discardIdx.length === 0) {
-    log(`Dica: manter a mão é a melhor opção (chance real de vencer a rodada considerando os adversários: ${(standPat.expected).toFixed(1)} casa(s) esperadas).${profileNote}`);
+    log(`Dica: manter a mão é a melhor opção (ganho médio esperado: ${(standPat.expected).toFixed(1)} casa(s)).${profileNote}`);
   } else {
     const extra = urgency === 'aggressive'
       ? ` — ${(best.pBig * 100).toFixed(0)}% de chance de sair com Straight ou melhor`
@@ -857,25 +823,13 @@ async function moveHoldemRound() {
   await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
 }
 
-// ---------------- 5-Card Draw rule: only the best hand(s) of the round advance ----------------
+// ---------------- 5-Card Draw: find the round's best hand (for the "melhor mão" display) ----------------
 function determineHandWinners(players) {
   let best = null;
   players.forEach(p => {
     if (!best || compareHands(p.evalResult, best) > 0) best = p.evalResult;
   });
   return players.filter(p => compareHands(p.evalResult, best) === 0);
-}
-
-async function moveWinnersOnly(winners, allPlayers) {
-  const stationary = allPlayers.filter(p => !winners.includes(p));
-  const targets = resolveMovementTargets(winners, stationary);
-  targets.forEach(t => {
-    if (t.target !== t.player.position + t.player.evalResult.moveDistance && t.target < TOTAL_RACE_LENGTH) {
-      log(`${t.player.name} encontrou a pista ocupada e parou na casa ${t.target}.`);
-    }
-  });
-  revealRaceBoardIfNeeded();
-  await Promise.all(targets.map(t => animateMoveTo(t.player, t.target)));
 }
 
 // ---------------- Ranking & payout ----------------
@@ -954,23 +908,19 @@ async function playRoundDraw() {
     p.evalResult = evaluateHand(p.hand);
     p.revealed = true;
   });
-  const winners = determineHandWinners(state.players);
+  const winners = determineHandWinners(state.players); // still used to show the round's best hand
   renderHand();
   renderPlayers();
   updateCommunitySlots(winners[0].hand); // show the best hand of the round on the board's card slots
   await delay(300);
 
-  const winnerNames = winners.map(w => w.name).join(' e ');
   state.players.forEach(p => {
-    const isWinner = winners.includes(p);
-    log(isWinner
-      ? `${p.name}: ${p.evalResult.name} (${formatCards(p.hand)}) — avança ${p.evalResult.moveDistance} casa(s)!`
-      : `${p.name}: ${p.evalResult.name} (${formatCards(p.hand)}) — não é a melhor mão, fica parado.`);
+    log(`${p.name}: ${p.evalResult.name} (${formatCards(p.hand)}) — avança ${p.evalResult.moveDistance} casa(s)!`);
   });
-  updatePhase(winners.length > 1 ? `Empate! ${winnerNames} avançam!` : `${winnerNames} tem a melhor mão e avança!`);
+  updatePhase('Todos avançam conforme sua própria mão!');
   await delay(700);
 
-  await moveWinnersOnly(winners, state.players);
+  await moveEveryone();
   renderPlayers();
 
   await finishRoundOrContinue(playRoundDraw);
