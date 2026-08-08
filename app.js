@@ -354,8 +354,11 @@ function tiebreakScore(tiebreak) {
 }
 
 function analyzeDiscardOptions(hand, opponentCount) {
-  const handIds = new Set(hand.map(c => c.id));
-  const pool = freshDeck().filter(c => !handIds.has(c.id)); // 47 unseen cards
+  // state.deck at this point already excludes every player's dealt hand (human AND bots) —
+  // it's the true set of cards that could still be drawn. Using a naive "47 unseen cards"
+  // pool instead would let the simulation "draw" cards that are actually already sitting in
+  // a bot's hand and can never come up, overstating the odds of completing certain hands.
+  const pool = state.deck;
   const TRIALS = 800;
   const current = evaluateHand(hand);
   const currentDistance = current.moveDistance;
@@ -369,11 +372,11 @@ function analyzeDiscardOptions(hand, opponentCount) {
       const ourHand = discardIdx.length === 0 ? hand : keepCards.concat(sampleDistinct(pool, discardIdx.length));
       const ourEval = evaluateHand(ourHand);
 
-      // Opponents' cards are unknown, so model them as random hands drawn from the same
-      // unseen pool (a simplification — real bots also try to improve their hand, so this
-      // is a slight underestimate of how tough they are, but it's the best we can do without
-      // seeing their cards). Only count the move if we actually beat (or tie) everyone —
-      // that's what the "only the best hand advances" rule really requires.
+      // We still don't peek at the opponents' actual dealt cards for this comparison (that
+      // would turn the hint into a cheat) — they're modeled as a random hand drawn from the
+      // same true remaining pool, which is the best estimate possible without seeing their
+      // cards. Only count the move if we actually beat (or tie) everyone — that's what the
+      // "only the best hand advances" rule really requires.
       const usedIds = new Set(ourHand.map(c => c.id));
       const remaining = pool.filter(c => !usedIds.has(c.id));
       const oppCards = sampleDistinct(remaining, 5 * opponentCount);
