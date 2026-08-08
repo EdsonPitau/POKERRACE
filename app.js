@@ -50,8 +50,16 @@ function updateCoinsDisplay() {
   }
 }
 
-const DRAW_PAYOUT = { 1: 100, 2: 50, 3: 25, 4: 0 };
-const HOLDEM_MULTIPLIER = { 1: 3, 2: 2, 3: 1, 4: 0 };
+const DRAW_PAYOUT_LADDER = [100, 50, 25, 0];
+const HOLDEM_MULT_LADDER = [3, 2, 1, 0];
+// Scales a 4-tier reward ladder down to the actual number of players in the race: with fewer
+// players, the LAST `totalPlayers` tiers of the ladder are used (so with 2 players, 1st/2nd
+// place pay what 3rd/4th would in a full 4-player race) — same logic for coins and multiplier.
+function scaledReward(ladder, rank, totalPlayers) {
+  const offset = ladder.length - totalPlayers;
+  const idx = offset + (rank - 1);
+  return idx >= 0 && idx < ladder.length ? ladder[idx] : 0;
+}
 
 // ---------------- Setup screen ----------------
 let setupBots = 2;
@@ -1042,7 +1050,7 @@ async function playRoundHoldem() {
     log(`${potWinners.map(p => p.name).join(' e ')} venceu(ram) o pote de ${state.pot} moedas!`);
   }
 
-  activePlayers.forEach(p => log(`${p.name}: ${p.evalResult.name} (${formatCards(p.holeCards)}) — avança ${p.evalResult.moveDistance} casa(s)!`));
+  activePlayers.forEach(p => log(`${p.name}: ${p.evalResult.name} (${formatCards(p.evalResult.cards)}) — avança ${p.evalResult.moveDistance} casa(s)!`));
   updatePhase(handDecidedByFold ? 'Os demais desistiram — só quem ficou avança!' : 'Quem não desistiu avança conforme sua mão!');
   await delay(700);
 
@@ -1080,12 +1088,13 @@ function endGame(champion) {
   const human = state.players[0];
   const humanRank = ranking.find(r => r.player === human);
 
+  const totalPlayers = state.players.length;
   if (state.mode === 'draw') {
-    const coinsEarned = DRAW_PAYOUT[humanRank.rank] || 0;
+    const coinsEarned = scaledReward(DRAW_PAYOUT_LADDER, humanRank.rank, totalPlayers);
     if (coinsEarned > 0) addPlayerCoins(coinsEarned);
     state.lastPayout = coinsEarned;
   } else {
-    const mult = HOLDEM_MULTIPLIER[humanRank.rank] || 0;
+    const mult = scaledReward(HOLDEM_MULT_LADDER, humanRank.rank, totalPlayers);
     const bonus = human.raceWinnings * mult;
     if (bonus > 0) addPlayerCoins(bonus);
     state.lastPayout = bonus;

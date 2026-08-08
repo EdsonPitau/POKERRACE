@@ -90,7 +90,7 @@ function evaluateHand(cards) {
     tiebreak = ranks;
   }
 
-  return { category, name: HAND_NAME[category], moveDistance: HAND_MOVE[category], tiebreak };
+  return { category, name: HAND_NAME[category], moveDistance: HAND_MOVE[category], tiebreak, cards };
 }
 
 function compareHands(a, b) {
