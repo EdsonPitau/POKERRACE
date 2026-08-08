@@ -13,7 +13,7 @@ let humanDrawResolver = null;
 let humanBetResolver = null;
 let humanZeroResolver = null;
 let tokenElements = new Map(); // player -> its persistent <img> kart token element
-const HOLDEM_STARTING_CHIPS = 1000; // in-race betting bankroll (funny money, not real coins) — matches the 1.000-coin entry requirement
+const HOLDEM_STARTING_CHIPS = 500; // in-race betting bankroll (funny money, not real coins) — matches the 500-coin entry requirement
 
 // ---------------- Coins (persisted for the human player only) ----------------
 const COINS_KEY = 'pokerrace_coins_v2';
@@ -44,9 +44,9 @@ function updateCoinsDisplay() {
   $$('.coins-value').forEach(el => el.textContent = playerCoins);
   const holdemBtn = document.getElementById('modeHoldemBtn');
   if (holdemBtn) {
-    const locked = playerCoins < 1000;
+    const locked = playerCoins < 500;
     holdemBtn.classList.toggle('locked', locked);
-    holdemBtn.title = locked ? 'Requer 1.000 moedas para jogar Texas Hold\'em' : '';
+    holdemBtn.title = locked ? 'Requer 500 moedas para jogar Texas Hold\'em' : '';
   }
 }
 
@@ -92,12 +92,12 @@ function initSetupScreen() {
   modeRow.innerHTML = '';
   [['draw', '5-Card Draw'], ['holdem', "Texas Hold'em"]].forEach(([val, label]) => {
     const b = document.createElement('button');
-    const locked = val === 'holdem' && playerCoins < 1000;
+    const locked = val === 'holdem' && playerCoins < 500;
     b.className = 'choice-btn' + (val === setupMode ? ' active' : '') + (locked ? ' locked' : '');
     b.id = val === 'holdem' ? 'modeHoldemBtn' : '';
-    b.innerHTML = label + (locked ? '<br><small>🔒 requer 1.000 moedas</small>' : '');
+    b.innerHTML = label + (locked ? '<br><small>🔒 requer 500 moedas</small>' : '');
     b.onclick = () => {
-      if (locked) { alert("Texas Hold'em precisa de pelo menos 1.000 moedas de saldo. Jogue 5-Card Draw para ganhar moedas!"); return; }
+      if (locked) { alert("Texas Hold'em precisa de pelo menos 500 moedas de saldo. Jogue 5-Card Draw para ganhar moedas!"); return; }
       setupMode = val; initSetupScreen();
     };
     modeRow.appendChild(b);
@@ -880,7 +880,14 @@ async function moveWinnersOnly(winners, allPlayers) {
 
 // ---------------- Ranking & payout ----------------
 function computeFinalRanking(players) {
-  const sorted = players.slice().sort((a, b) => b.position - a.position);
+  const sorted = players.slice().sort((a, b) => {
+    if (a.position !== b.position) return b.position - a.position;
+    // True exact-position tie: whoever had the stronger hand that round deserves to rank
+    // above, instead of silently falling back to array order (which always favored the
+    // human, since they're index 0 — not a real tie-break).
+    if (a.evalResult && b.evalResult) return compareHands(b.evalResult, a.evalResult);
+    return 0;
+  });
   const ranks = [];
   let currentRank = 1;
   for (let i = 0; i < sorted.length; i++) {
@@ -1061,10 +1068,7 @@ async function playRoundHoldem() {
 }
 
 async function concludeHoldemRace() {
-  const finishers = state.players.filter(p => p.position >= TOTAL_RACE_LENGTH);
-  const champion = finishers.length > 0
-    ? finishers.slice().sort((a, b) => b.position - a.position)[0]
-    : state.players.slice().sort((a, b) => b.position - a.position)[0];
+  const champion = computeFinalRanking(state.players)[0].player;
   await delay(300);
   endGame(champion);
 }
@@ -1075,7 +1079,10 @@ async function finishRoundOrContinue(nextRoundFn) {
   const finishers = state.players.filter(p => p.position >= TOTAL_RACE_LENGTH);
   if (finishers.length > 0) {
     await delay(500);
-    endGame(finishers[0]);
+    // The champion must always be whoever computeFinalRanking() itself puts in 1st place
+    // (same position + hand-strength tie-break used for the results screen's ranking list) —
+    // not just whichever finisher happened to appear first in state.players' array order.
+    endGame(computeFinalRanking(state.players)[0].player);
     return;
   }
   state.round++;
