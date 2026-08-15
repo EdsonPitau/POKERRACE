@@ -178,7 +178,7 @@ function switchToRaceBoard() {
 
 function initCommunitySlots() {
   const label = document.getElementById('communityPanelLabel');
-  if (label) label.textContent = state.mode === 'holdem' ? 'Cartas comunitárias' : 'Melhor mão da rodada';
+  if (label) label.textContent = state.mode === 'holdem' ? 'Cartas comunitárias' : 'Mão do(s) Bot(s)';
   const row = document.getElementById('communityCardsRow');
   if (!row) return;
   row.innerHTML = '';
@@ -908,10 +908,21 @@ async function playRoundDraw() {
     p.evalResult = evaluateHand(p.hand);
     p.revealed = true;
   });
-  const winners = determineHandWinners(state.players); // still used to show the round's best hand
   renderHand();
   renderPlayers();
-  updateCommunitySlots(winners[0].hand); // show the best hand of the round on the board's card slots
+
+  // Show a bot's hand in the big card slots — not the round's overall winner, since that
+  // could be the human's own hand (already visible in their own hand area below, no need to
+  // repeat it). With more than one bot, show the best hand among just the bots.
+  const bots = state.players.filter(p => !p.isHuman);
+  const bestBots = determineHandWinners(bots);
+  const label = document.getElementById('communityPanelLabel');
+  if (label) {
+    label.textContent = bestBots.length > 1
+      ? `Melhor mão entre os Bots (empate: ${bestBots.map(b => b.name).join(', ')})`
+      : `Mão de ${bestBots[0].name}`;
+  }
+  updateCommunitySlots(bestBots[0].hand);
   await delay(300);
 
   state.players.forEach(p => {
