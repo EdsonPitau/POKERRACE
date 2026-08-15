@@ -178,7 +178,7 @@ function switchToRaceBoard() {
 
 function initCommunitySlots() {
   const label = document.getElementById('communityPanelLabel');
-  if (label) label.textContent = state.mode === 'holdem' ? 'Cartas comunitárias' : 'Mão do(s) Bot(s)';
+  if (label) label.textContent = state.mode === 'holdem' ? 'Cartas comunitárias' : 'Melhor mão da rodada';
   const row = document.getElementById('communityCardsRow');
   if (!row) return;
   row.innerHTML = '';
@@ -908,22 +908,14 @@ async function playRoundDraw() {
     p.evalResult = evaluateHand(p.hand);
     p.revealed = true;
   });
+  const winners = determineHandWinners(state.players);
   renderHand();
   renderPlayers();
+  updateCommunitySlots(winners[0].hand); // best hand of the round, shown below the board
 
-  // Show a bot's hand in the big card slots — not the round's overall winner, since that
-  // could be the human's own hand (already visible in their own hand area below, no need to
-  // repeat it). With more than one bot, show the best hand among just the bots.
-  const bots = state.players.filter(p => !p.isHuman);
-  const bestBots = determineHandWinners(bots);
-  const label = document.getElementById('communityPanelLabel');
-  if (label) {
-    label.textContent = bestBots.length > 1
-      ? `Melhor mão entre os Bots (empate: ${bestBots.map(b => b.name).join(', ')})`
-      : `Mão de ${bestBots[0].name}`;
-  }
-  updateCommunitySlots(bestBots[0].hand);
-  await delay(300);
+  // Dedicated pause so there's real time to compare each player's revealed cards (shown as
+  // mini-cards under their name/casa in the strip at the top) before anything starts moving.
+  await delay(2200);
 
   state.players.forEach(p => {
     log(`${p.name}: ${p.evalResult.name} (${formatCards(p.hand)}) — avança ${p.evalResult.moveDistance} casa(s)!`);
@@ -1047,7 +1039,7 @@ async function finishRoundOrContinue(nextRoundFn) {
     return;
   }
   state.round++;
-  await delay(800);
+  await delay(1600);
   nextRoundFn();
 }
 
